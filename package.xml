@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>rl_environments</name>
+  <version>0.0.1</version>
+  <description>The rl_environments package</description>
+
+  <author email="j.kapukotuwa@research.ait.ie">Jayasekara Kapukotuwa</author>
+  <maintainer email="j.kapukotuwa@research.ait.ie">Jayasekara Kapukotuwa</maintainer>
+
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>multiros</build_depend>
+  <build_depend>realros</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>std_msgs</build_depend>
+
+  <build_export_depend>rospy</build_export_depend>
+  <build_export_depend>geometry_msgs</build_export_depend>
+  <build_export_depend>multiros</build_export_depend>
+  <build_export_depend>realros</build_export_depend>
+  <build_export_depend>sensor_msgs</build_export_depend>
+  <build_export_depend>std_msgs</build_export_depend>
+
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>multiros</exec_depend>
+  <exec_depend>realros</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+
+  <!-- The export tag contains other, unspecified, tags -->
+  <export>
+    <!-- Other tools can request additional information be placed here -->
+
+  </export>
+</package>
