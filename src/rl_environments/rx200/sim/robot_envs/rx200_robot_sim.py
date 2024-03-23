@@ -8,7 +8,8 @@ from multiros.envs import GazeboBaseEnv
 
 import rospy
 import rostopic
-from sensor_msgs.msg import JointState
+from sensor_msgs.msg import JointState, PointCloud2, Image
+from cv_bridge import CvBridge
 from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -50,7 +51,7 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
     def __init__(self, ros_port: str = None, gazebo_port: str = None, gazebo_pid=None, seed: int = None,
                  real_time: bool = False, action_cycle_time=0.0, load_cube: bool = False, load_table: bool = False,
-                 use_kinect: bool = False, use_gripper: bool = False):
+                 use_kinect: bool = False):
         """
         Initializes a new Robot Environment
 
@@ -129,11 +130,17 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         Spawn other objects in Gazebo
         """
         # spawn a table
+        self.load_table = load_table
+
         if load_table:
             gazebo_models.spawn_sdf_model_gazebo(pkg_name="reactorx200_description", file_name="model.sdf",
                                                  model_folder="/models/table",
                                                  model_name="table", namespace=namespace,
                                                  pos_x=0.2)
+
+            # above function pauses the simulation, so we need to unpause it for real-time
+            if self.real_time:
+                gazebo_core.unpause_gazebo()
 
         # spawn a cube
         if load_cube:
@@ -141,7 +148,11 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                                                  model_folder="/models/block",
                                                  model_name="red_cube", namespace=namespace,
                                                  pos_x=0.35,
-                                                 pos_z=0.795 if load_table else 0.0)
+                                                 pos_z=0.795 if load_table else 0.015)
+
+            # above function pauses the simulation, so we need to unpause it for real-time
+            if self.real_time:
+                gazebo_core.unpause_gazebo()
 
         """
         Set if the controllers in "controller_list" will be reset at the beginning of each episode, default is False.
@@ -233,21 +244,39 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                                        args=["robot_model:=rx200", "dof:=5", "use_python_interface:=true",
                                              "use_moveit_rviz:=false"])
 
+        # ---------- kinect
+        self.use_kinect = use_kinect
+
+        if self.use_kinect:
+            # point cloud subscriber
+            # self.kinect_depth_sub = rospy.Subscriber("/head_mount_kinect2/depth/points", PointCloud2,
+            #                                    self.kinect_depth_callback)
+            # self.kinect_depth = PointCloud2()
+
+            # rgb image subscriber
+            self.kinect_rgb_sub = rospy.Subscriber("/head_mount_kinect2/rgb/image_raw", Image,
+                                                   self.kinect_rgb_callback)
+            self.kinect_rgb = Image()
+            self.cv_image = None
+
         """
         Using the _check_connection_and_readiness method to check for the connection status of subscribers, publishers 
         and services
         """
+
         self._check_connection_and_readiness()
 
         """
         initialise controller and sensor objects here
         """
+        self.arm_joint_names = ["waist",
+                                "shoulder",
+                                "elbow",
+                                "wrist_angle",
+                                "wrist_rotate"]
 
-        self.joint_names = ["waist",
-                            "shoulder",
-                            "elbow",
-                            "wrist_angle",
-                            "wrist_rotate"]
+        self.gripper_joint_names = ["left_finger",
+                                    "right_finger"]
 
         if self.real_time:
             # we don't need to pause/unpause gazebo if we are running in real time
@@ -262,10 +291,15 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                                                     ns="rx200")
 
         # low-level control
-        # rostopic for joint trajectory controller
-        self.joint_trajectory_controller_pub = rospy.Publisher('/rx200/arm_controller/command',
-                                                               JointTrajectory,
-                                                               queue_size=10)
+        # rostopic for arm trajectory controller
+        self.arm_controller_pub = rospy.Publisher('/rx200/arm_controller/command',
+                                                  JointTrajectory,
+                                                  queue_size=10)
+
+        # rostopic for gripper controller
+        self.gripper_controller_pub = rospy.Publisher('/rx200/gripper_controller/command',
+                                                      JointTrajectory,
+                                                      queue_size=10)
 
         # parameters for calculating FK
         self.ee_link = "rx200/ee_gripper_link"
@@ -289,9 +323,13 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
     """
     Define the custom methods for the environment
+        * get_model_pose: Get the pose of an object in Gazebo
+        * spawn_cube_in_gazebo: Spawn a cube in Gazebo
+        * remove_cube_in_gazebo: Remove the cube from Gazebo
         * fk_pykdl: Function to calculate the forward kinematics of the robot arm. We are using pykdl_utils.
-        * move_joints: Set a joint position target only for the arm joints using low-level ros controllers.
         * joint_state_callback: Get the joint state of the robot
+        * move_arm_joints: Set a joint position target only for the arm joints using low-level ros controllers.
+        * move_gripper_joints: Set a joint position target only for the gripper joints using low-level ros controllers.
         * set_trajectory_joints: Set a joint position target only for the arm joints.
         * set_trajectory_ee: Set a pose target for the end effector of the robot arm.
         * get_ee_pose: Get end-effector pose a geometry_msgs/PoseStamped message
@@ -299,7 +337,74 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         * get_joint_angles: Get current joint angles of the robot arm - 5 elements
         * check_goal: Check if the goal is reachable
         * check_goal_reachable_joint_pos: Check if the goal is reachable with joint positions
+        * kinect_depth_callback: Callback function for kinect depth sensor
+        * kinect_rgb_callback: Callback function for kinect rgb sensor
     """
+
+    def get_model_pose(self, model_name="red_cube"):
+        """
+        Get the pose of an object in Gazebo
+
+        Args:
+            model_name: name of the object whose pose is to be retrieved
+
+        Returns:
+            pose: pose of the object as a geometry_msgs/PoseStamped message
+        """
+
+        if not self.real_time:
+            gazebo_core.unpause_gazebo()
+
+        header, pose, twist, success = gazebo_models.gazebo_get_model_state(model_name=model_name,
+                                                                            relative_entity_name="rx200/base_link")
+
+        if not self.real_time:
+            gazebo_core.pause_gazebo()
+
+        # pose contains the position and orientation of the object
+        return pose
+
+    def spawn_cube_in_gazebo(self, model_pos_x, model_pos_y):
+        """
+        Spawn a cube in Gazebo
+
+        Args:
+            model_pos_x: x-coordinate of the cube
+            model_pos_y: y-coordinate of the cube
+
+        Returns:
+            done: True if the cube is spawned successfully
+        """
+        if self.load_table:
+            model_pos_z = 0.795
+        else:
+            model_pos_z = 0.015
+
+        # spawn a cube
+        done = gazebo_models.spawn_sdf_model_gazebo(pkg_name="reactorx200_description", file_name="block.sdf",
+                                                    model_folder="/models/block",
+                                                    model_name="red_cube", namespace="/rx200",
+                                                    pos_x=model_pos_x,
+                                                    pos_y=model_pos_y,
+                                                    pos_z=model_pos_z)
+
+        # above function pauses the simulation, so we need to unpause it
+        if self.real_time:
+            gazebo_core.unpause_gazebo()
+
+        return done
+
+    def remove_cube_in_gazebo(self):
+        """
+        Remove the cube from Gazebo
+        """
+        done = gazebo_models.remove_model_gazebo(model_name="red_cube")
+
+        # above function pauses the simulation, so we need to unpause it
+        if self.real_time:
+            gazebo_core.unpause_gazebo()
+
+        return done
 
     def fk_pykdl(self, action):
         """
@@ -345,13 +450,13 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
             # get the current joint efforts - not using this
             self.current_joint_efforts = list(joint_state.effort)
 
-    def move_joints(self, q_positions: np.ndarray, time_from_start: float = 0.5) -> bool:
+    def move_arm_joints(self, q_positions: np.ndarray, time_from_start: float = 0.5) -> bool:
         """
         Set a joint position target only for the arm joints using low-level ros controllers.
 
         Args:
             q_positions: joint positions of the robot arm
-            time_from_start: time from start of the trajectory (set the speed to complete the trajectory within this time)
+            time_from_start: time from start of the trajectory (set the speed to complete the trajectory)
 
         Returns:
             True if the action is successful
@@ -359,15 +464,41 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         # create a JointTrajectory object
         trajectory = JointTrajectory()
-        trajectory.joint_names = self.joint_names
+        trajectory.joint_names = self.arm_joint_names
         trajectory.points.append(JointTrajectoryPoint())
         trajectory.points[0].positions = q_positions
-        trajectory.points[0].velocities = [0.0] * len(self.joint_names)
-        trajectory.points[0].accelerations = [0.0] * len(self.joint_names)
+        trajectory.points[0].velocities = [0.0] * len(self.arm_joint_names)
+        trajectory.points[0].accelerations = [0.0] * len(self.arm_joint_names)
         trajectory.points[0].time_from_start = rospy.Duration(time_from_start)
 
         # send the trajectory to the controller
-        self.joint_trajectory_controller_pub.publish(trajectory)
+        self.arm_controller_pub.publish(trajectory)
+
+        return True
+
+    def move_gripper_joints(self, q_positions: np.ndarray, time_from_start: float = 0.5) -> bool:
+        """
+        Set a joint position target only for the gripper joints using low-level ros controllers.
+
+        Args:
+            q_positions: joint positions of the gripper
+            time_from_start: time from start of the trajectory (set the speed to complete the trajectory)
+
+        Returns:
+            True if the action is successful
+        """
+
+        # create a JointTrajectory object
+        trajectory = JointTrajectory()
+        trajectory.joint_names = self.gripper_joint_names
+        trajectory.points.append(JointTrajectoryPoint())
+        trajectory.points[0].positions = q_positions
+        trajectory.points[0].velocities = [0.0] * len(self.gripper_joint_names)
+        trajectory.points[0].accelerations = [0.0] * len(self.gripper_joint_names)
+        trajectory.points[0].time_from_start = rospy.Duration(time_from_start)
+
+        # send the trajectory to the controller
+        self.gripper_controller_pub.publish(trajectory)
 
         return True
 
@@ -426,6 +557,21 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         """
         return self.move_RX200_object.check_goal_joint_pos(joint_pos)
 
+    ## we can try this later
+    # def kinect_depth_callback(self, data):
+    #     """
+    #     Callback function for kinect depth sensor
+    #     """
+    #     self.kinect_depth = data
+
+    def kinect_rgb_callback(self, img_msg):
+        """
+        Callback function for kinect rgb sensor
+        """
+        self.kinect_rgb = img_msg
+        bridge = CvBridge()
+        self.cv_image = bridge.imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
+
     # helper fn for _check_connection_and_readiness
     def _check_joint_states_ready(self):
         """
@@ -460,6 +606,14 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         return True
 
+    def _check_kinect_ready(self):
+        """
+        Function to check if kinect sensor is running
+        """
+        rospy.logdebug(rostopic.get_topic_type("/head_mount_kinect2/depth/points", blocking=True))
+
+        return True
+
     def _check_connection_and_readiness(self):
         """
         Function to check the connection status of subscribers, publishers and services, as well as the readiness of
@@ -468,6 +622,9 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         self._check_moveit_ready()
         self._check_joint_states_ready()
         self._check_ros_controllers_ready()
+
+        if self.use_kinect:
+            self._check_kinect_ready()
 
         rospy.loginfo("All system are ready!")
 
