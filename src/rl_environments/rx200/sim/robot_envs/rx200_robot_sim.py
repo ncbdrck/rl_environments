@@ -21,7 +21,7 @@ from multiros.utils import gazebo_physics
 from multiros.utils.moveit_multiros import MoveitMultiros
 from multiros.utils import ros_common
 from multiros.utils import ros_controllers
-from multiros.utils import ros_markers
+from multiros.utils import ros_kinematics
 
 from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
@@ -301,13 +301,18 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                                                       JointTrajectory,
                                                       queue_size=10)
 
-        # parameters for calculating FK
+        # parameters for calculating FK, IK
         self.ee_link = "rx200/ee_gripper_link"
         self.ref_frame = "rx200/base_link"
 
-        # Fk with pykdl_utils
+        # Fk with pykdl_utils - old method
         self.pykdl_robot = URDF.from_parameter_server(key='rx200/robot_description')
         self.kdl_kin = KDLKinematics(urdf=self.pykdl_robot, base_link=self.ref_frame, end_link=self.ee_link)
+
+        # with ros_kinematics
+        self.ros_kin = ros_kinematics.Kinematics_pyrobot(robot_description_parm="rx200/robot_description",
+                                                         base_link=self.ref_frame,
+                                                         end_link=self.ee_link)
 
         """
         Finished __init__ method
@@ -428,6 +433,46 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         # ee_orientation = euler_from_matrix(pose[:3, :3], 'sxyz')
 
         return ee_position
+
+    def calculate_fk(self, joint_positions, euler=True):
+        """
+        Calculate the forward kinematics of the robot arm using the ros_kinematics package.
+
+        Args:
+            joint_positions: joint positions of the robot arm (in radians)
+            euler: True if the orientation is to be returned as euler angles (default: True)
+
+        Returns:
+            done: True if the FK calculation is successful
+            ee_position: end-effector position as a numpy array
+            ee_rpy: end-effector orientation as a list of rpy or quaternion values
+        """
+        done, ee_position, ee_ori = self.ros_kin.calculate_fk(joint_positions, des_frame=self.ee_link, euler=euler)
+
+        return done, ee_position, ee_ori
+
+    def calculate_ik(self, ee_position, ee_ori=np.array([0.0, 0.0, 0.0, 1.0])):
+        """
+        Calculate the inverse kinematics of the robot arm using the ros_kinematics package.
+
+        Args:
+            ee_position: end-effector position as a numpy array
+            ee_ori: end-effector orientation as a list of quaternion values (default: [0.0, 0.0, 0.0, 1.0])
+
+        Returns:
+            done: True if the IK calculation is successful
+            joint_positions: joint positions of the robot arm (in radians)
+        """
+        # define the pose in 1D array [x, y, z, qx, qy, qz, qw]
+        ee_pose = np.concatenate((ee_position, ee_ori))
+
+        # get the current joint positions
+        q = self.get_joint_angles()
+
+        done, joint_positions = self.ros_kin.calculate_ik(target_pose=ee_pose, tolerance=[1e-3] * 6,
+                                                          init_joint_positions=q)
+
+        return done, joint_positions
 
     def joint_state_callback(self, joint_state):
         """
