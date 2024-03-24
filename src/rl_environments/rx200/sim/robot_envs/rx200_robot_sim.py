@@ -9,10 +9,12 @@ from multiros.envs import GazeboBaseEnv
 import rospy
 import rostopic
 from sensor_msgs.msg import JointState, PointCloud2, Image
-from cv_bridge import CvBridge
 from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+
+from cv_bridge import CvBridge
+import cv2
 
 # core modules of the framework
 from multiros.utils import gazebo_core
@@ -248,16 +250,17 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         self.use_kinect = use_kinect
 
         if self.use_kinect:
-            # point cloud subscriber
-            # self.kinect_depth_sub = rospy.Subscriber("/head_mount_kinect2/depth/points", PointCloud2,
-            #                                    self.kinect_depth_callback)
-            # self.kinect_depth = PointCloud2()
+            # depth image subscriber
+            self.kinect_depth_sub = rospy.Subscriber("/head_mount_kinect2/depth/image_raw", Image,
+                                                        self.kinect_depth_callback)
+            self.kinect_depth = Image()
+            self.cv_image_depth = None
 
             # rgb image subscriber
             self.kinect_rgb_sub = rospy.Subscriber("/head_mount_kinect2/rgb/image_raw", Image,
                                                    self.kinect_rgb_callback)
             self.kinect_rgb = Image()
-            self.cv_image = None
+            self.cv_image_rgb = None
 
         """
         Using the _check_connection_and_readiness method to check for the connection status of subscribers, publishers 
@@ -602,12 +605,19 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         """
         return self.move_RX200_object.check_goal_joint_pos(joint_pos)
 
-    ## we can try this later
-    # def kinect_depth_callback(self, data):
-    #     """
-    #     Callback function for kinect depth sensor
-    #     """
-    #     self.kinect_depth = data
+    def kinect_depth_callback(self, data):
+        """
+        Callback function for kinect depth sensor
+        """
+        self.kinect_depth = data
+
+        # Convert ROS image message to OpenCV format (32FC1)
+        bridge = CvBridge()
+        cv_image_depth = bridge.imgmsg_to_cv2(data, desired_encoding="32FC1")
+        self.cv_image_depth = cv_image_depth
+        # print("Shape of depth:", cv_image_depth.shape)  # for debugging
+        # todo: for the CNN policy
+        # (480, 640) - for pytorch, this needs to be converted to (1, 480, 640)
 
     def kinect_rgb_callback(self, img_msg):
         """
@@ -615,7 +625,15 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         """
         self.kinect_rgb = img_msg
         bridge = CvBridge()
-        self.cv_image = bridge.imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
+
+        # Convert ROS image message to OpenCV format (BGR)
+        cv_image_bgr = bridge.imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
+
+        # Convert from BGR to RGB (required for pytorch or tensorflow CNNs) - (480, 640, 3)
+        self.cv_image_rgb = cv2.cvtColor(cv_image_bgr, cv2.COLOR_BGR2RGB)
+        # print("Shape of rgb:", cv_image_rgb.shape)  # for debugging
+        # todo: for the CNN policy
+        # (480, 640, 3) - for pytorch, this needs to be converted to (3, 480, 640)
 
     # helper fn for _check_connection_and_readiness
     def _check_joint_states_ready(self):
