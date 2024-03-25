@@ -1,2 +1,4 @@
 # NumPy for numerical computations
 numpy
+scipy
+opencv-python
