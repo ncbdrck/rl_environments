@@ -454,12 +454,12 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         return done, ee_position, ee_ori
 
-    def calculate_ik(self, ee_position, ee_ori=np.array([0.0, 0.0, 0.0, 1.0])):
+    def calculate_ik(self, target_pos, ee_ori=np.array([0.0, 0.0, 0.0, 1.0])):
         """
         Calculate the inverse kinematics of the robot arm using the ros_kinematics package.
 
         Args:
-            ee_position: end-effector position as a numpy array
+            target_pos: target end-effector position as a numpy array
             ee_ori: end-effector orientation as a list of quaternion values (default: [0.0, 0.0, 0.0, 1.0])
 
         Returns:
@@ -467,13 +467,13 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
             joint_positions: joint positions of the robot arm (in radians)
         """
         # define the pose in 1D array [x, y, z, qx, qy, qz, qw]
-        ee_pose = np.concatenate((ee_position, ee_ori))
+        target_pose = np.concatenate((target_pos, ee_ori))
 
         # get the current joint positions
-        q = self.get_joint_angles()
+        ee_position = self.get_joint_angles()
 
-        done, joint_positions = self.ros_kin.calculate_ik(target_pose=ee_pose, tolerance=[1e-3] * 6,
-                                                          init_joint_positions=q)
+        done, joint_positions = self.ros_kin.calculate_ik(target_pose=target_pose, tolerance=[1e-3] * 6,
+                                                          init_joint_positions=ee_position)
 
         return done, joint_positions
 
