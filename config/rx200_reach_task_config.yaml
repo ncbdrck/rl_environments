@@ -1,16 +1,10 @@
 rx200: #namespace
 
     # ******** Task Related parameters (we don't use these)
-    n_actions: 5  # The number of available actions (default)
-    n_actions_joint: 5  # The number of available actions (joint positions)
-    n_actions_ee: 3  # The number of available actions (EE position)
-    n_observations: 28  # The number of observations (default)
-    n_observations_joint: 28  # The number of observations (joint positions)
-    n_observations_ee: 26  # The number of observations (EE position)
     max_steps: 1000  # Maximum number of steps (not currently used)
 
     # ******** Action Space
-    # Define the minimum and maximum joint values
+    # Define the minimum and maximum joint values with the gripper open
     min_joint_pos:
       - -3.12  # waist
       - -1.88  # shoulder
@@ -24,6 +18,25 @@ rx200: #namespace
       - 1.62  # elbow
       - 2.14  # wrist_angle
       - 3.12  # wrist_rotate
+
+    # Define the minimum and maximum joint values for grasping
+    min_joint_pos_grasp:
+      - -3.12  # waist
+      - -1.88  # shoulder
+      - -1.88  # elbow
+      - -1.74  # wrist_angle
+      - -3.12  # wrist_rotate
+      - 0.015  # left_finger
+      - -0.037  # right_finger
+
+    max_joint_pos_grasp:
+      - 3.12  # waist
+      - 1.97  # shoulder
+      - 1.62  # elbow
+      - 2.14  # wrist_angle
+      - 3.12  # wrist_rotate
+      - 0.037  # left_finger
+      - -0.015  # right_finger
 
     # ******** Observation Space
 
@@ -98,13 +111,13 @@ rx200: #namespace
 
     # ******** goal space
     position_goal_max: # Maximum XYZ position for the goal
-      x: 0.40
-      y: 0.40
-      z: 0.40
+      x: 0.25
+      y: 0.15
+      z: 0.25
     position_goal_min: # Minimum XYZ position for the goal
       x: 0.15
-      y: -0.40
-      z: 0.15
+      y: -0.15
+      z: 0.05
 
 
     # ******** achieved_goal and desired_goal
@@ -117,9 +130,9 @@ rx200: #namespace
     position_achieved_goal_min: # Minimum XYZ position for the achieved_goal
       x: -0.55
       y: -0.55
-      z: -0.55
+      z: 0.05  # Near zero to prevent going below the table
 
-    # In this task this is the same as goal
+    # In this task, this is the same as goal
     position_desired_goal_max: # Maximum XYZ position for the desired_goal
       x: 0.40
       y: 0.40
@@ -127,12 +140,12 @@ rx200: #namespace
     position_desired_goal_min: # Minimum XYZ position for the desired_goal
       x: 0.15
       y: -0.40
-      z: 0.15
+      z: 0.05
 
 
     # ******** Gazebo Simulation parameters
     gazebo_time_step: 0.001
-    gazebo_update_rate_multiplier: 50.0 # If training multiply the max update rate by this number
+    gazebo_update_rate_multiplier: 50.0 # If training, multiply the max update rate by this number
 
 
     # ******** Tolerance for the position of the goal
