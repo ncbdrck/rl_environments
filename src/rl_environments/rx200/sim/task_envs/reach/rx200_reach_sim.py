@@ -1,6 +1,6 @@
 #!/bin/python3
 
-from typing import Any
+from typing import Any, Optional, Dict
 
 import rospy
 import numpy as np
@@ -23,7 +23,7 @@ from multiros.utils import ros_markers
 # Register your environment using the gymnasium register method to utilize gym.make("TaskEnv-v0").
 register(
     id='RX200ReacherSim-v0',
-    entry_point='rl_environments.rx200.sim.task_envs.rx200_reach_sim:RX200ReacherEnv',
+    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_reach_sim:RX200ReacherEnv',
     max_episode_steps=1000,
 )
 
@@ -360,7 +360,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         if environment_loop_rate is not None and real_time:
             self.obs_r = None
             self.reward_r = None
-            self.terminated_r = None
+            self.terminated_r = False
             self.truncated_r = False
             self.info_r = {}
             self.current_action = None
@@ -388,7 +388,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
     # -------------------------------------------------------
     #   Methods for interacting with the environment
 
-    def _set_init_params(self, options: dict[str, Any] | None = None):
+    def _set_init_params(self, options: Optional[Dict[str, Any]] = None):
         """
         Set initial parameters for the environment.
 
@@ -457,7 +457,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             # init the real time variables
             self.obs_r = None
             self.reward_r = None
-            self.terminated_r = None
+            self.terminated_r = False
             self.truncated_r = False
             self.info_r = {}
 
@@ -505,8 +505,10 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         """
         # real time env
         if self.real_time:
-            obs = self.obs_r.copy()
-
+            obs = None
+            # we cannot copy a None value
+            if self.obs_r is not None:
+                obs = self.obs_r.copy()
         # normal env- Sequential
         else:
             obs = self.sample_observation()
@@ -517,7 +519,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         return obs.copy()
 
-    def _get_reward(self, info: dict[str, Any] | None = None):
+    def _get_reward(self, info: Optional[Dict[str, Any]] = None):
         """
         Function to get a reward from the environment.
 
@@ -526,7 +528,9 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         """
 
         if self.real_time:
-            reward = self.reward_r
+            reward = None
+            if self.reward_r is not None:
+                reward = self.reward_r
 
         else:
             reward = self.calculate_reward()
@@ -537,7 +541,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         return reward
 
-    def _compute_terminated(self, info: dict[str, Any] | None = None):
+    def _compute_terminated(self, info: Optional[Dict[str, Any]] = None):
         """
         Function to check if the episode is terminated.
 
@@ -561,7 +565,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         return terminated
 
-    def _compute_truncated(self, info: dict[str, Any] | None = None):
+    def _compute_truncated(self, info: Optional[Dict[str, Any]] = None):
         """
         Function to check if the episode is truncated.
 
