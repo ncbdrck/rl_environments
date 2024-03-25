@@ -19,7 +19,7 @@ rx200: #namespace
       - 2.14  # wrist_angle
       - 3.12  # wrist_rotate
 
-    # Define the minimum and maximum joint values for grasping
+    # Define the minimum and maximum joint values for grasping (not used for the reach task)
     min_joint_pos_grasp:
       - -3.12  # waist
       - -1.88  # shoulder
