@@ -376,7 +376,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         # for dense reward calculation
         self.action_not_in_limits = False
-        self.lowest_z = self.position_goal_min["z"] + 0.10  # 0.05 is the lowest z value for the goal
+        self.lowest_z = self.position_goal_min["z"]
         self.movement_result = False
         self.within_goal_space = False
 

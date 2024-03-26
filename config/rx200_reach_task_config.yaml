@@ -117,7 +117,7 @@ rx200: #namespace
     position_goal_min: # Minimum XYZ position for the goal
       x: 0.15
       y: -0.15
-      z: 0.05
+      z: 0.10
 
 
     # ******** achieved_goal and desired_goal
