@@ -33,14 +33,14 @@ from tf.transformations import euler_from_matrix
 Although it is best to register only the task environment, one can also register the robot environment. 
 This is not necessary, but we can see if this section 
 (Load the robot to gazebo and can control the robot with moveit or ros controllers)
-works by calling "gym.make" this env.
+works by calling "gymnasium.make" this env.
 but you need to
     1. run gazebo - gazebo_core.launch_gazebo(launch_roscore=False, paused=False, pub_clock_frequency=100, gui=True)
     2. init a node - rospy.init_node('test_MyRobotGoalEnv')
-    3. gym.make("RX200RobotEnv-v0")
+    3. gymnasium.make("RX200RobotEnv-v0")
 """
 register(
-    id='RX200RobotEnv-v2',
+    id='RX200RobotEnv-v0',
     entry_point='rl_environments.rx200.sim.robot_envs.rx200_robot_sim:RX200RobotEnv',
     max_episode_steps=1000,
 )
