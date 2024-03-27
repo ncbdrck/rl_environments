@@ -423,7 +423,8 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             rospy.logwarn("Homing failed!")
 
         #  Get a random Reach goal - np.array
-        goal_found, goal_vector = self.get_random_goal()
+        # goal_found, goal_vector = self.get_random_goal()  # this checks if the goal is reachable using moveit
+        goal_found, goal_vector = self.get_random_goal_no_check()
 
         if goal_found:
             self.reach_goal = goal_vector
@@ -990,6 +991,12 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         rospy.logdebug("Getting a random goal failed!")
 
         return False, None
+
+    def get_random_goal_no_check(self):
+        """
+        Function to get a random goal without checking
+        """
+        return True, self.goal_space.sample()
 
     # not used
     def check_action_within_goal_space_fk(self, action):
