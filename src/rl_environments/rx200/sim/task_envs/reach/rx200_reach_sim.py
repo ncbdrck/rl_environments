@@ -835,7 +835,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             A scalar reward value representing how well the agent is doing in the current episode.
         """
         # - Init reward
-        reward = 0
+        reward = 0.0
 
         achieved_goal = self.ee_pos
         desired_goal = self.reach_goal
@@ -844,7 +844,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         if self.reward_arc == "Sparse":
 
             # initialise the sparse reward as negative
-            reward = -1
+            reward = -1.0
 
             # The marker only turns green if reach is done. Otherwise, it is red.
             self.goal_marker.set_color(r=1.0, g=0.0)
@@ -854,7 +854,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             reach_done = self.check_if_reach_done(achieved_goal, desired_goal)
 
             if reach_done:
-                reward = 1
+                reward = 1.0
 
                 # done (green) goal_marker
                 self.goal_marker.set_color(r=0.0, g=1.0)
