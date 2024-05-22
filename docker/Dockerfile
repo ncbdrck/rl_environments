@@ -1,5 +1,8 @@
 FROM ubuntu:20.04
 
+# Set the environment variable to non-interactive to avoid prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install prerequisites
 RUN apt-get update && apt-get install -y \
     curl \
@@ -10,7 +13,11 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     python3-pip \
     python3-venv \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+# Set the timezone to avoid tzdata interactive prompt
+RUN ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime && dpkg-reconfigure --frontend noninteractive tzdata
 
 # Add your script to the Docker image
 COPY install_rl_env.sh /root/install_rl_env.sh

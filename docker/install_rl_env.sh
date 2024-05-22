@@ -48,8 +48,12 @@ function failed() {
 function prompt_user() {
   local prompt_message=$1
   local user_input
-  echo -e "${BLU}${BOLD}$prompt_message${PROMPT}${NORM}${OFF}\c"
-  read -r user_input
+  if [ "$NONINTERACTIVE" = true ]; then
+    user_input=""
+  else
+    echo -e "${BLU}${BOLD}$prompt_message${PROMPT}${NORM}${OFF}\c"
+    read -r user_input
+  fi
   echo $user_input
 }
 
