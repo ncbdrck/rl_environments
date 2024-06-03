@@ -40,8 +40,8 @@ but you need to
     3. gymnasium.make("RX200RobotEnv-v0")
 """
 register(
-    id='RX200RobotEnv-v0',
-    entry_point='rl_environments.rx200.sim.robot_envs.rx200_robot_sim:RX200RobotEnv',
+    id='RX200RobotEnv_zed2-v0',
+    entry_point='rl_environments.rx200.sim.robot_envs.rx200_robot_sim_zed2:RX200RobotEnv',
     max_episode_steps=1000,
 )
 
@@ -49,11 +49,12 @@ register(
 class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
     """
     Superclass for all RX200 Robot environments.
+        - Uses a ZED2 camera for RGB and Depth images
     """
 
     def __init__(self, ros_port: str = None, gazebo_port: str = None, gazebo_pid=None, seed: int = None,
                  real_time: bool = False, action_cycle_time=0.0, load_cube: bool = False, load_table: bool = False,
-                 use_kinect: bool = False):
+                 use_zed2: bool = False):
         """
         Initializes a new Robot Environment
 
@@ -62,13 +63,13 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         Sensor Topic List:
             MoveIt: To get the pose and rpy of the robot.
             /joint_states: JointState received for the joints of the robot
-            /head_mount_kinect2/depth/image_raw: Depth image from the kinect sensor
-            /head_mount_kinect2/rgb/image_raw: RGB image from the kinect sensor
+            /rx200/zed2/depth/depth_registered: Depth image from ZED2 camera
+            /rx200/zed2/left/image_rect_color: RGB image from ZED2 camera
 
         Actuators Topic List:
             MoveIt: Send the joint positions to the robot.
-            /rx200/arm_controller/command: Send the joint positions to the robot.
-            /rx200/gripper_controller/command: Send the joint positions to the robot.
+            /rx200/arm_controller/command: Send the joint positions to the arm controller
+            /rx200/gripper_controller/command: Send the joint positions to the gripper controller
         """
         rospy.loginfo("Start Init RX200RobotEnv Multiros")
 
@@ -102,7 +103,7 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         # location of the robot URDF file
         urdf_pkg_name = "reactorx200_description"
-        urdf_file_name = "rx200_kinect.urdf.xacro"
+        urdf_file_name = "rx200_zed2.urdf.xacro"
         urdf_folder = "/urdf"
 
         # extra urdf args
@@ -249,20 +250,20 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                                        args=["robot_model:=rx200", "dof:=5", "use_python_interface:=true",
                                              "use_moveit_rviz:=false"])
 
-        # ---------- kinect
-        self.use_kinect = use_kinect
+        # ---------- ZED 2 Camera
+        self.use_zed2 = use_zed2
 
-        if self.use_kinect:
+        if self.use_zed2:
             # depth image subscriber
-            self.kinect_depth_sub = rospy.Subscriber("/head_mount_kinect2/depth/image_raw", Image,
-                                                        self.kinect_depth_callback)
-            self.kinect_depth = Image()
+            self.zed2_depth_sub = rospy.Subscriber("/rx200/zed2/depth/depth_registered", Image,
+                                                        self.zed2_depth_callback)
+            self.zed2_depth = Image()
             self.cv_image_depth = None
 
             # rgb image subscriber
-            self.kinect_rgb_sub = rospy.Subscriber("/head_mount_kinect2/rgb/image_raw", Image,
-                                                   self.kinect_rgb_callback)
-            self.kinect_rgb = Image()
+            self.zed2_rgb_sub = rospy.Subscriber("/rx200/zed2/left/image_rect_color", Image,
+                                                   self.zed2_rgb_callback)
+            self.zed2_rgb = Image()
             self.cv_image_rgb = None
 
         """
@@ -348,8 +349,8 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         * get_joint_angles: Get current joint angles of the robot arm - 5 elements
         * check_goal: Check if the goal is reachable
         * check_goal_reachable_joint_pos: Check if the goal is reachable with joint positions
-        * kinect_depth_callback: Callback function for kinect depth sensor
-        * kinect_rgb_callback: Callback function for kinect rgb sensor
+        * zed2_depth_callback: Callback function for zed2 depth sensor
+        * zed2_rgb_callback: Callback function for zed2 rgb sensor
     """
 
     def get_model_pose(self, model_name="red_cube"):
@@ -608,11 +609,11 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         """
         return self.move_RX200_object.check_goal_joint_pos(joint_pos)
 
-    def kinect_depth_callback(self, data):
+    def zed2_depth_callback(self, data):
         """
-        Callback function for kinect depth sensor
+        Callback function for zed2 depth sensor
         """
-        self.kinect_depth = data
+        self.zed2_depth = data
 
         # Convert ROS image message to OpenCV format (32FC1)
         bridge = CvBridge()
@@ -622,11 +623,11 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         # todo: for the CNN policy
         # (480, 640) - for pytorch, this needs to be converted to (1, 480, 640)
 
-    def kinect_rgb_callback(self, img_msg):
+    def zed2_rgb_callback(self, img_msg):
         """
-        Callback function for kinect rgb sensor
+        Callback function for zed2 rgb sensor
         """
-        self.kinect_rgb = img_msg
+        self.zed2_rgb = img_msg
         bridge = CvBridge()
 
         # Convert ROS image message to OpenCV format (BGR)
@@ -672,11 +673,11 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         return True
 
-    def _check_kinect_ready(self):
+    def _check_zed2_ready(self):
         """
-        Function to check if kinect sensor is running
+        Function to check if zed2 sensor is running
         """
-        rospy.logdebug(rostopic.get_topic_type("/head_mount_kinect2/depth/points", blocking=True))
+        rospy.logdebug(rostopic.get_topic_type("/rx200/zed2/left/image_rect_color", blocking=True))
 
         return True
 
@@ -689,8 +690,8 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         self._check_joint_states_ready()
         self._check_ros_controllers_ready()
 
-        if self.use_kinect:
-            self._check_kinect_ready()
+        if self.use_zed2:
+            self._check_zed2_ready()
 
         rospy.loginfo("All system are ready!")
 
