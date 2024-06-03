@@ -62,10 +62,13 @@ class RX200RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         Sensor Topic List:
             MoveIt: To get the pose and rpy of the robot.
             /joint_states: JointState received for the joints of the robot
+            /head_mount_kinect2/depth/image_raw: Depth image from the kinect sensor
+            /head_mount_kinect2/rgb/image_raw: RGB image from the kinect sensor
 
         Actuators Topic List:
             MoveIt: Send the joint positions to the robot.
             /rx200/arm_controller/command: Send the joint positions to the robot.
+            /rx200/gripper_controller/command: Send the joint positions to the robot.
         """
         rospy.loginfo("Start Init RX200RobotGoalEnv Multiros!")
 

@@ -38,6 +38,7 @@ This is the v0 of the RX200 Reacher Goal conditioned Task Environment.
 class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
     """
     This Task env is for a simple Reach Task with the RX200 robot.
+    This env is made to work in a real-time environment.
 
     The task is done if
         * The robot reached the goal
@@ -59,9 +60,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         * delta_action: Whether to use the delta actions or the absolute actions.
         * delta_coeff: Coefficient to be used for the delta actions.
         * ee_action_type: Whether to use the end effector action space or the joint action space.
-        * real_time: Whether to use real time or not.
-        * environment_loop_rate: Rate at which the environment should run. (in Hz)
-        * action_cycle_time: Time to wait between two consecutive actions. (in seconds)
+        * environment_loop_rate: Rate at which the environment should run. (in Hz) default is 10 Hz - max (0.100 seconds)
+        * action_cycle_time: Time to wait between two consecutive actions. (in seconds) default is 0.100 seconds
         * use_smoothing: Whether to use smoothing for actions or not.
         * rgb_obs_only: Whether to use only the RGB image as the observations or not.
         * normal_obs_only: Whether to use only the traditional observations or not.
@@ -69,15 +69,16 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         * rgb_plus_depth_plus_normal_obs: Whether to use RGB image, Depth image and traditional observations or not.
         * load_table: Whether to load the table model or not.
         * debug: Whether to print debug messages or not.
+        * log_internal_state: Whether to log the internal state of the environment or not. (action cycle time, etc.)
     """
 
     def __init__(self, launch_gazebo: bool = True, new_roscore: bool = True, roscore_port: str = None,
                  gazebo_paused: bool = False, gazebo_gui: bool = False, seed: int = None, reward_type: str = "sparse",
                  delta_action: bool = True, delta_coeff: float = 0.05, ee_action_type: bool = False,
-                 real_time: bool = True, environment_loop_rate: float = 10, action_cycle_time: float = 0.100,
+                 environment_loop_rate: float = 10, action_cycle_time: float = 0.100,
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
-                 load_table: bool = True, debug: bool = False):
+                 load_table: bool = True, debug: bool = False, log_internal_state: bool = False):
 
         """
         variables to keep track of ros, gazebo ports and gazebo pid
@@ -936,8 +937,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         # - Init reward
         reward = 0.0
 
-        achieved_goal = self.ee_pos
-        desired_goal = self.reach_goal
+        # achieved_goal = self.ee_pos
+        # desired_goal = self.reach_goal
 
         # if it's "Sparse" reward structure
         if self.reward_arc == "Sparse":
