@@ -23,15 +23,17 @@ from multiros.utils import ros_markers
 # Register your environment using the gymnasium register method to utilize gym.make("TaskEnv-v0").
 register(
     id='RX200ReacherSim-v0',
-    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_reach_sim:RX200ReacherEnv',
+    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim:RX200ReacherEnv',
     max_episode_steps=1000,
 )
 
 """
 This is the v0 of the RX200 Reacher Task Environment.
+- uses the kinect v2 sensor
 - option to use vision sensors - depth and rgb images
 - action space is joint positions of the robot arm or xyz position of the end effector. No gripper control
 - reward is sparse or dense
+- goal is to reach a goal position
 """
 
 
@@ -58,8 +60,8 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         * delta_coeff: Coefficient to be used for the delta actions.
         * ee_action_type: Whether to use the end effector action space or the joint action space.
         * real_time: Whether to use real time or not.
-        * environment_loop_rate: Rate at which the environment should run. (in Hz)
-        * action_cycle_time: Time to wait between two consecutive actions. (in seconds)
+        * environment_loop_rate: Rate at which the environment should run. (in Hz) - default 10 Hz (max of the robot)
+        * action_cycle_time: Time to wait between two consecutive actions. (in seconds) - default 100 ms (max of the robot)
         * use_smoothing: Whether to use smoothing for actions or not.
         * rgb_obs_only: Whether to use only the RGB image as the observations or not.
         * normal_obs_only: Whether to use only the traditional observations or not.
