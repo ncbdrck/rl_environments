@@ -623,7 +623,7 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         self.cv_image_depth = cv_image_depth
         # print("Shape of depth:", cv_image_depth.shape)  # for debugging
         # todo: for the CNN policy
-        # (480, 640) - for pytorch, this needs to be converted to (1, 480, 640)
+        # (720, 1280) - for pytorch, this needs to be converted to (1, 720, 1280)
 
     def zed2_rgb_callback(self, img_msg):
         """
@@ -635,11 +635,11 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         # Convert ROS image message to OpenCV format (BGR)
         cv_image_bgr = bridge.imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
 
-        # Convert from BGR to RGB (required for pytorch or tensorflow CNNs) - (480, 640, 3)
+        # Convert from BGR to RGB (required for pytorch or tensorflow CNNs) - (720, 1280, 3)
         self.cv_image_rgb = cv2.cvtColor(cv_image_bgr, cv2.COLOR_BGR2RGB)
         # print("Shape of rgb:", cv_image_rgb.shape)  # for debugging
         # todo: for the CNN policy
-        # (480, 640, 3) - for pytorch, this needs to be converted to (3, 480, 640)
+        # (720, 1280, 3) - for pytorch, this needs to be converted to (3, 720, 1280)
 
     # helper fn for _check_connection_and_readiness
     def _check_joint_states_ready(self):
