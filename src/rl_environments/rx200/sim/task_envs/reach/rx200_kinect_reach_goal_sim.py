@@ -23,7 +23,7 @@ from multiros.utils import ros_markers
 # Register your environment using the OpenAI register method to utilize gym.make("MyTaskGoalEnv-v0").
 register(
     id='RX200ReacherGoalSim-v0',
-    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_reach_goal_sim:RX200ReacherGoalEnv',
+    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_goal_sim:RX200ReacherGoalEnv',
     max_episode_steps=1000,
 )
 
@@ -32,6 +32,9 @@ This is the v0 of the RX200 Reacher Goal conditioned Task Environment.
 - option to use vision sensors - depth and rgb images
 - action space is joint positions of the robot arm or xyz position of the end effector. No gripper control
 - reward is sparse or dense
+- goal is to reach a goal position
+- Only works in real-time mode no sequential mode
+- uses kinect v2 for vision
 """
 
 
@@ -60,8 +63,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         * delta_action: Whether to use the delta actions or the absolute actions.
         * delta_coeff: Coefficient to be used for the delta actions.
         * ee_action_type: Whether to use the end effector action space or the joint action space.
-        * environment_loop_rate: Rate at which the environment should run. (in Hz) default is 10 Hz - max (0.100 seconds)
-        * action_cycle_time: Time to wait between two consecutive actions. (in seconds) default is 0.100 seconds
+        * environment_loop_rate: Rate at which the environment should run. (in Hz) default is 10 Hz - (default operating frequency of the robot)
+        * action_cycle_time: Time to wait between two consecutive actions. (in seconds) - default 100 ms (should be equal to larger than the environment loop time "1/environment_loop_rate")
         * use_smoothing: Whether to use smoothing for actions or not.
         * rgb_obs_only: Whether to use only the RGB image as the observations or not.
         * normal_obs_only: Whether to use only the traditional observations or not.
@@ -70,6 +73,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         * load_table: Whether to load the table model or not.
         * debug: Whether to print debug messages or not.
         * log_internal_state: Whether to log the internal state of the environment or not. (action cycle time, etc.)
+        * action_speed: set the speed to complete the trajectory. default in 0.5 seconds
+        * simple_dense_reward: Whether to use a simple dense reward or not.
     """
 
     def __init__(self, launch_gazebo: bool = True, new_roscore: bool = True, roscore_port: str = None,
@@ -78,7 +83,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
                  environment_loop_rate: float = 10, action_cycle_time: float = 0.100,
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
-                 load_table: bool = True, debug: bool = False, log_internal_state: bool = False):
+                 load_table: bool = True, debug: bool = False, log_internal_state: bool = False,
+                 action_speed: float = 0.5, simple_dense_reward: bool = True):
 
         """
         variables to keep track of ros, gazebo ports and gazebo pid
@@ -140,6 +146,15 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         rospy.loginfo(f"Starting {self.node_name}")
 
         """
+        Exit the program if
+        - (1/environment_loop_rate) is greater than action_cycle_time
+        """
+        if (1.0 / environment_loop_rate) > action_cycle_time:
+            rospy.logerr("The environment loop rate is greater than the action cycle time. Exiting the program!")
+            rospy.signal_shutdown("Exiting the program!")
+            exit()
+
+        """
         Reward Architecture
             * Dense - Default
             * Sparse - -1 if not done and 1 if done
@@ -155,6 +170,10 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             rospy.logwarn(f"The given reward architecture '{reward_type}' not found. Defaulting to Dense!")
             self.reward_arc = "Dense"
 
+        # check if we are using simple dense reward
+        # for simple, we only return the distance to the goal (negative Euclidean distance = -d)
+        self.simple_dense_reward = simple_dense_reward
+
         """
         Use action as deltas
         """
@@ -166,6 +185,11 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         """
         self.use_smoothing = use_smoothing
         self.action_cycle_time = action_cycle_time
+
+        """
+        Action speed - Time to complete the trajectory
+        """
+        self.action_speed = action_speed
 
         """
         Observation space
@@ -393,6 +417,19 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
                                      seed=seed)
 
         """
+        Workspace so we can check if the action is within the workspace
+        """
+        # ---- Workspace
+        high_workspace_range = np.array(
+            np.array([self.workspace_max["x"], self.workspace_max["y"], self.workspace_max["z"]]))
+        low_workspace_range = np.array(
+            np.array([self.workspace_min["x"], self.workspace_min["y"], self.workspace_min["z"]]))
+
+        # -- workspace space for checking
+        # we don't need to set the seed here since we're not sampling from this space
+        self.workspace_space = spaces.Box(low=low_workspace_range, high=high_workspace_range, dtype=np.float32)
+
+        """
         Define subscribers/publishers and Markers as needed.
         """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
@@ -402,7 +439,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         Init super class.
         """
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-                         real_time=real_time, action_cycle_time=action_cycle_time, use_kinect=use_kinect,
+                         real_time=True, action_cycle_time=action_cycle_time, use_kinect=use_kinect,
                          load_table=load_table)
 
         # for smoothing
@@ -412,15 +449,12 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             else:
                 self.action_vector = np.zeros(5, dtype=np.float32)
 
-        # real time parameters
-        self.real_time = real_time  # This is already done in the superclass. So this is just for readability
-
         # we can use this to set a time for ros_controllers to complete the action
         self.environment_loop_time = 1.0 / environment_loop_rate  # in seconds
 
         self.prev_action = None  # we need this for observation
 
-        if environment_loop_rate is not None and real_time:
+        if environment_loop_rate is not None:
             self.obs_r = None
             self.reward_r = None
             self.terminated_r = False
@@ -437,7 +471,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             # create a timer to run the environment loop
             rospy.Timer(rospy.Duration(1.0 / environment_loop_rate), self.environment_loop)
 
-        # for dense reward calculation
+        # for dense reward calculation - for more complex reward calculations
         self.action_not_in_limits = False
         self.lowest_z = self.position_goal_min["z"]
         self.movement_result = False
@@ -465,9 +499,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         self.init_pos = np.array([0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
 
         # make the current action None to stop execution for real time envs and also stop the env loop
-        if self.real_time:
-            self.init_done = False  # we don't need to execute the loop until we reset the env
-            self.current_action = None
+        self.init_done = False  # we don't need to execute the loop until we reset the env
+        self.current_action = None
 
         # for smoothing
         if self.use_smoothing:
@@ -514,25 +547,25 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         self.prev_action = self.init_pos.copy()  # for observation
 
         # We can start the environment loop now
-        if self.real_time:
-            rospy.loginfo("Start resetting the env loop!")
 
-            # init the real time variables
-            self.obs_r = None
-            self.reward_r = None
-            self.terminated_r = False
-            self.truncated_r = False
-            self.info_r = {}
+        rospy.loginfo("Start resetting the env loop!")
 
-            # debug
-            if self.debug:
-                self.loop_counter = 0
-                self.action_counter = 0
+        # init the real time variables
+        self.obs_r = None
+        self.reward_r = None
+        self.terminated_r = False
+        self.truncated_r = False
+        self.info_r = {}
 
-            rospy.loginfo("Done resetting the env loop!")
+        # debug
+        if self.debug:
+            self.loop_counter = 0
+            self.action_counter = 0
 
-            self.init_done = True
-            # self.current_action = self.init_pos.copy()
+        rospy.loginfo("Done resetting the env loop!")
+
+        self.init_done = True
+        # self.current_action = self.init_pos.copy()
 
         rospy.loginfo("Initialising init params done--->")
 
@@ -546,18 +579,14 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         # save the action for observation
         self.prev_action = action.copy()
 
-        # real time env
-        if self.real_time:
-            rospy.loginfo(f"Applying real-time action---> {action}")
-            self.current_action = action.copy()
+        rospy.loginfo(f"Applying real-time action---> {action}")
+        self.current_action = action.copy()
 
-            # for debugging
-            if self.debug:
-                self.action_counter = 0  # reset the action counter
+        # for debugging
+        if self.debug:
+            self.action_counter = 0  # reset the action counter
 
-        # normal env- Sequential
-        else:
-            self.execute_action(action)
+
 
     def _get_observation(self):
         """
@@ -566,15 +595,10 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         Returns:
             An observation representing the current state of the environment.
         """
-        # real time env
-        if self.real_time:
-            obs = None
-            # we cannot copy a None value
-            if self.obs_r is not None:
-                obs = self.obs_r.copy()
-        # normal env- Sequential
-        else:
-            obs = self.sample_observation()
+        obs = None
+        # we cannot copy a None value
+        if self.obs_r is not None:
+            obs = self.obs_r.copy()
 
         # incase we don't have an observation yet for real time envs
         if obs is None:
@@ -612,16 +636,15 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         Returns:
             reward (float): The reward for achieving the given goal.
         """
-        if self.real_time:
-            reward = None
-            if self.reward_r is not None:
-                reward = self.reward_r
+        # check if we are using this with HER
+        is_her = info.get('is_her', False)  # this is set in the HER sampler (my custom implementation)
 
-        # normal env- Sequential
-        else:
-            reward = self.calculate_reward(achieved_goal, desired_goal, info)
+        reward = None
+        if self.reward_r is not None and not is_her:
+            reward = self.reward_r
 
         # incase we don't have a reward yet for real time envs
+        # also for Hindsight Experience Replay
         if reward is None:
             reward = self.calculate_reward(achieved_goal, desired_goal, info)
 
@@ -640,19 +663,16 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             A boolean value indicating whether the episode has ended
             (e.g. because a goal has been reached or a failure condition has been triggered)
         """
-
-        # real time env
-        if self.real_time:
-            terminated = self.terminated_r
-            self.info = self.info_r  # we can use this to log the success rate in stable baselines3
-
-        # normal env- Sequential
-        else:
-            terminated = self.check_if_done()
+        terminated = self.terminated_r
+        self.info = self.info_r  # we can use this to log the success rate in stable baselines3
 
         # incase we don't have a done yet for real time envs
+        # unnecessary to check since we never set the terminated to None
         if terminated is None:
-            terminated = self.check_if_done(real_time=self.real_time)
+            terminated = self.check_if_done()
+
+            if terminated:
+                self.info["is_success"] = 1.0  # explicitly set the success rate
 
         return terminated
 
@@ -671,14 +691,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             A boolean value indicating whether the episode has been truncated
             (e.g. because the maximum number of steps has been reached)
         """
-
-        # real time env
-        if self.real_time:
-            truncated = self.truncated_r
-
-        # normal env- Sequential
-        else:
-            truncated = False
+        truncated = self.truncated_r
 
         return truncated
 
@@ -701,7 +714,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             self.info_r = {}
             self.obs_r = self.sample_observation()
             self.reward_r = self.calculate_reward()
-            self.terminated_r = self.check_if_done(real_time=True)
+            self.terminated_r = self.check_if_done()
 
             # Apply the action
             # we need this if we're done with the task we can break the loop in above done check
@@ -767,15 +780,16 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             action = np.clip(action, self.min_ee_values, self.max_ee_values)
 
             # check if we can reach the goal and within the goal space
-            # check if action is within the z limits
-            if action[2] > self.lowest_z:
+            # check if action is within the workspace
+            if self.workspace_space.contains(action):
 
                 # calculate IK
                 IK_found, joint_positions = self.calculate_ik(target_pos=action, ee_ori=self.ee_ori)
 
                 if IK_found:
                     # execute the trajectory - EE
-                    self.movement_result = self.move_arm_joints(q_positions=joint_positions)
+                    self.movement_result = self.move_arm_joints(q_positions=joint_positions,
+                                                                time_from_start=self.action_speed)
                     self.within_goal_space = True
 
                 else:
@@ -833,10 +847,10 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             if self.debug:
                 rospy.logwarn(f"Action + current joint_values after clip --->: {action}")
 
-            # check if the action is within the z limits
-            if self.check_if_z_within_limits(action):
+            # check if the action is within the workspace
+            if self.check_action_within_workspace(action):
                 # execute the trajectory - ros_controllers
-                self.movement_result = self.move_arm_joints(q_positions=action)
+                self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
                 self.within_goal_space = True
 
             else:
@@ -937,8 +951,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         # - Init reward
         reward = 0.0
 
-        # achieved_goal = self.ee_pos
-        # desired_goal = self.reach_goal
+        # check if we are using this with HER
+        is_her = info.get('is_her', False)
 
         # if it's "Sparse" reward structure
         if self.reward_arc == "Sparse":
@@ -967,48 +981,57 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
 
         # Since we only look for Sparse or Dense, we don't need to check if it's Dense
         else:
-            # - Check if the EE reached the goal
-            done = self.check_if_reach_done(achieved_goal, desired_goal)
-
-            if done:
-                # EE reached the goal
-                reward += self.reached_goal_reward
-
-                # done (green) goal_marker
-                self.goal_marker.set_color(r=0.0, g=1.0)
-                self.goal_marker.set_duration(duration=5)
-
-            else:
-                # not done (red) goal_marker
-                self.goal_marker.set_color(r=1.0, g=0.0)
-                self.goal_marker.set_duration(duration=5)
-
+            # in case of simple dense reward or HER
+            if self.simple_dense_reward or is_her:
                 # - Distance from EE to goal reward
                 dist2goal = scipy.spatial.distance.euclidean(achieved_goal, desired_goal)
-                reward += - self.mult_dist_reward * dist2goal
+                reward += - dist2goal
 
-                # - Constant step reward
-                reward += self.step_reward
+            # for normal dense reward
+            else:
 
-            # publish the goal marker
-            self.goal_marker.publish()
+                # - Check if the EE reached the goal
+                done = self.check_if_reach_done(achieved_goal, desired_goal)
 
-            # - Check if actions are in limits
-            reward += self.action_not_in_limits * self.joint_limits_reward
+                if done:
+                    # EE reached the goal
+                    reward += self.reached_goal_reward
 
-            # - Check if the action is within the goal space
-            reward += (not self.within_goal_space) * self.not_within_goal_space_reward
+                    # done (green) goal_marker
+                    self.goal_marker.set_color(r=0.0, g=1.0)
+                    self.goal_marker.set_duration(duration=5)
 
-            # to punish for actions where we cannot execute
-            if not self.movement_result:
-                reward += self.none_exe_reward
+                else:
+                    # not done (red) goal_marker
+                    self.goal_marker.set_color(r=1.0, g=0.0)
+                    self.goal_marker.set_duration(duration=5)
+
+                    # - Distance from EE to goal reward
+                    dist2goal = scipy.spatial.distance.euclidean(achieved_goal, desired_goal)
+                    reward += - self.mult_dist_reward * dist2goal
+
+                    # - Constant step reward
+                    reward += self.step_reward
+
+                # publish the goal marker
+                self.goal_marker.publish()
+
+                # - Check if actions are in limits
+                reward += self.action_not_in_limits * self.joint_limits_reward
+
+                # - Check if the action is within the goal space
+                reward += (not self.within_goal_space) * self.not_within_goal_space_reward
+
+                # to punish for actions where we cannot execute
+                if not self.movement_result:
+                    reward += self.none_exe_reward
 
             # log the reward
             rospy.logwarn(">>>REWARD>>>" + str(reward))
 
         return reward
 
-    def check_if_done(self, real_time=False):
+    def check_if_done(self):
         """
         Function to check if the episode is done.
 
@@ -1036,13 +1059,9 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             rospy.loginfo(GREEN + ">>>>>>>>>>>> Reached the Goal! >>>>>>>>>>>" + ENDC)
             done = True
 
-            # we can use this to log the success rate in stable baselines3
-            if real_time:
-                self.current_action = None  # we don't need to execute any more actions
-                self.init_done = False  # we don't need to execute the loop until we reset the env
-                self.info_r['is_success'] = 1.0
-            else:
-                self.info['is_success'] = 1.0
+            self.current_action = None  # we don't need to execute any more actions
+            self.init_done = False  # we don't need to execute the loop until we reset the env
+            self.info_r['is_success'] = 1.0
 
         return done
 
@@ -1063,6 +1082,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
 
         return done
 
+    # not used
     def test_goal_pos(self, goal):
         """
         Function to check if the given goal is reachable
@@ -1075,6 +1095,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
 
         return result
 
+    # not used
     def get_random_goal(self, max_tries: int = 100):
         """
         Function to get a reachable goal
@@ -1116,43 +1137,42 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         rospy.logwarn("Checking if the action is within the goal space failed!")
         return False
 
-    # not used
-    def check_action_within_goal_space_pykdl(self, action):
+    def check_action_within_workspace(self, action):
         """
-        Function to check if the given action is within the goal space
+        Function to check if the given action is within the workspace
 
         Args:
             action: The action to be applied to the robot.
 
         Returns:
-            A boolean value indicating whether the action is within the goal space
+            A boolean value indicating whether the action is within the workspace
         """
 
         BLUE = '\033[94m'
         ENDC = '\033[0m'
 
-        # check if the resulting ee pose is within the goal space - using FK
+        # check if the resulting ee pose is within the workspace - using FK
         ee_pos = self.fk_pykdl(action=action)
 
         if self.debug:
-            print("goal space", self.goal_space)  # for debugging
+            print("goal space", self.workspace_space)  # for debugging
 
         if ee_pos is not None:
-            # check if the ee pose is within the goal space - using self.goal_space
-            if self.goal_space.contains(ee_pos):
-                rospy.logdebug(f"The ee pose {ee_pos} of the {action} is within the goal space!")
+            # check if the ee pose is within the workspace - using self.workspace_space
+            if self.workspace_space.contains(ee_pos):
+                rospy.logdebug(f"The ee pose {ee_pos} of the {action} is within the workspace!")
                 if self.debug:
-                    print(BLUE + f"The ee pose {ee_pos} of the {action} is within the goal space!" + ENDC)
+                    print(BLUE + f"The ee pose {ee_pos} of the {action} is within the workspace!" + ENDC)
                 return True
             else:
-                rospy.logdebug(f"The ee pose {ee_pos} is not within the goal space!")
+                rospy.logdebug(f"The ee pose {ee_pos} is not within the workspace!")
                 if self.debug:
-                    print(BLUE + f"The ee pose {ee_pos} is not within the goal space!" + ENDC)
+                    print(BLUE + f"The ee pose {ee_pos} is not within the workspace!" + ENDC)
                 return False
 
-        rospy.logwarn("Checking if the action is within the goal space failed!")
+        rospy.logwarn("Checking if the action is within the workspace failed!")
         if self.debug:
-            print(BLUE + "Checking if the action is within the goal space failed!" + ENDC)
+            print(BLUE + "Checking if the action is within the workspace failed!" + ENDC)
         return False
 
     def check_if_z_within_limits(self, action):
@@ -1220,6 +1240,10 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         self.joint_limits_reward = rospy.get_param('/rx200/joint_limits_reward')
         self.none_exe_reward = rospy.get_param('/rx200/none_exe_reward')
         self.not_within_goal_space_reward = rospy.get_param('/rx200/not_within_goal_space_reward')
+
+        # workspace
+        self.workspace_max = rospy.get_param('/rx200/workspace_max')
+        self.workspace_min = rospy.get_param('/rx200/workspace_min')
 
     # ------------------------------------------------------
     #   Task Methods for launching gazebo or roscore

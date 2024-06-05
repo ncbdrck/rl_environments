@@ -59,8 +59,8 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         * delta_action: Whether to use the delta actions or the absolute actions.
         * delta_coeff: Coefficient to be used for the delta actions.
         * ee_action_type: Whether to use the end effector action space or the joint action space.
-        * environment_loop_rate: Rate at which the environment should run. (in Hz) - default 10 Hz (max of the robot)
-        * action_cycle_time: Time to wait between two consecutive actions. (in seconds) - default 100 ms (max of the robot)
+        * environment_loop_rate: Rate at which the environment should run. (in Hz) - default 10 Hz (default operating frequency of the robot)
+        * action_cycle_time: Time to wait between two consecutive actions. (in seconds) - default 100 ms (should be equal to larger than the environment loop time "1/environment_loop_rate")
         * use_smoothing: Whether to use smoothing for actions or not.
         * rgb_obs_only: Whether to use only the RGB image as the observations or not.
         * normal_obs_only: Whether to use only the traditional observations or not.
@@ -80,7 +80,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
                  load_table: bool = True, debug: bool = False, action_speed: float = 0.5,
-                 simple_dense_reward: bool = False):
+                 simple_dense_reward: bool = True):
 
         """
         variables to keep track of ros, gazebo ports and gazebo pid
@@ -573,7 +573,9 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         # unnecessary to check since we never set the terminated to None
         if terminated is None:
             terminated = self.check_if_done()
-            self.info['is_success'] = 1.0  # explicitly set the success rate
+
+            if terminated:
+                self.info["is_success"] = 1.0  # explicitly set the success rate
 
         return terminated
 
@@ -1042,7 +1044,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         BLUE = '\033[94m'
         ENDC = '\033[0m'
 
-        # check if the resulting ee pose is within the goal space - using FK
+        # check if the resulting ee pose is within the workspace - using FK
         ee_pos = self.fk_pykdl(action=action)
 
         if self.debug:
