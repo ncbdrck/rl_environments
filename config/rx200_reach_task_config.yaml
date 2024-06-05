@@ -117,7 +117,17 @@ rx200: #namespace
     position_goal_min: # Minimum XYZ position for the goal
       x: 0.15
       y: -0.15
-      z: 0.10
+      z: 0.15
+
+    # ******** Workspace -  we need to restrict the workspace to prevent the robot from hitting the table or itself
+    workspace_max: # Maximum XYZ position for the workspace
+      x: 0.55
+      y: 0.55
+      z: 0.55
+    workspace_min: # Minimum XYZ position for the workspace
+      x: 0.10
+      y: -0.55
+      z: 0.10  # Near zero to prevent going below the table
 
 
     # ******** achieved_goal and desired_goal
