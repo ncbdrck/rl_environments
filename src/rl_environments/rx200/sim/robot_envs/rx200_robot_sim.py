@@ -338,6 +338,8 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         * spawn_cube_in_gazebo: Spawn a cube in Gazebo
         * remove_cube_in_gazebo: Remove the cube from Gazebo
         * fk_pykdl: Function to calculate the forward kinematics of the robot arm. We are using pykdl_utils.
+        * calculate_fk: Calculate the forward kinematics of the robot arm using the ros_kinematics package.
+        * calculate_ik: Calculate the inverse kinematics of the robot arm using the ros_kinematics package.
         * joint_state_callback: Get the joint state of the robot
         * move_arm_joints: Set a joint position target only for the arm joints using low-level ros controllers.
         * move_gripper_joints: Set a joint position target only for the gripper joints using low-level ros controllers.
