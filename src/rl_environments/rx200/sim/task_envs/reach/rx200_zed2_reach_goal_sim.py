@@ -9,7 +9,7 @@ from gymnasium.envs.registration import register
 import scipy.spatial
 
 # Custom robot env
-from rl_environments.rx200.sim.robot_envs import rx200_robot_goal_sim
+from rl_environments.rx200.sim.robot_envs import rx200_robot_goal_sim_zed2
 
 # core modules of the framework
 from multiros.utils import gazebo_core
@@ -22,23 +22,22 @@ from multiros.utils import ros_markers
 
 # Register your environment using the OpenAI register method to utilize gym.make("MyTaskGoalEnv-v0").
 register(
-    id='RX200ReacherGoalSim-v0',
-    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_goal_sim:RX200ReacherGoalEnv',
+    id='RX200Zed2ReacherGoalSim-v0',
+    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_zed2_reach_goal_sim:RX200ReacherGoalEnv',
     max_episode_steps=1000,
 )
 
 """
-This is the v0 of the RX200 Reacher Goal conditioned Task Environment.
+This is the v0 of the RX200 Reacher Goal conditioned Task Environment. ZED2 camera is used for vision sensing.
 - option to use vision sensors - depth and rgb images
 - action space is joint positions of the robot arm or xyz position of the end effector. No gripper control
 - reward is sparse or dense
 - goal is to reach a goal position
 - Only works in real-time mode no sequential mode
-- uses kinect v2 for vision
 """
 
 
-class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
+class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
     """
     This Task env is for a simple Reach Task with the RX200 robot.
     This env is made to work in a real-time environment.
@@ -312,11 +311,11 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         # Define the traditional observation space
         self.observations = spaces.Box(low=low, high=high, dtype=np.float32)
 
-        # Define the depth image space (480x640 32FC1) - this uses 32-bit float
-        self.depth_image_space = spaces.Box(low=0, high=1, shape=(480, 640), dtype=np.float32)
+        # Define the depth image space (720x1280 32FC1) - this uses 32-bit float
+        self.depth_image_space = spaces.Box(low=0, high=1, shape=(720, 1280), dtype=np.float32)
 
-        # Define the image space (480x640X3 RGB images) - this uses 8-bit unsigned int
-        self.rgb_image_space = spaces.Box(low=0, high=255, shape=(480, 640, 3), dtype=np.uint8)
+        # Define the image space (720x1280X3 RGB images) - this uses 8-bit unsigned int
+        self.rgb_image_space = spaces.Box(low=0, high=255, shape=(720, 1280, 3), dtype=np.uint8)
 
         """
         Achieved goal (EE pose) - 3
@@ -348,7 +347,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         Define the overall observation space
         """
         if self.normal_obs:
-            use_kinect = False  # to pass to the superclass
+            use_zed2 = False  # to pass to the superclass
             self.observation_space = spaces.Dict({
                 'observation': self.observations,
                 'achieved_goal': self.achieved_goal_space,
@@ -356,7 +355,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             })
 
         elif self.rgb_obs:
-            use_kinect = True
+            use_zed2 = True
             self.observation_space = spaces.Dict({
                 'observation': self.rgb_image_space,
                 'achieved_goal': self.achieved_goal_space,
@@ -364,7 +363,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             })
 
         elif self.rgb_plus_normal_obs:
-            use_kinect = True
+            use_zed2 = True
 
             # Define a combined observation space
             obs =  spaces.Dict({
@@ -380,7 +379,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             })
 
         elif self.rgb_plus_depth_plus_normal_obs:
-            use_kinect = True
+            use_zed2 = True
             # Define a combined observation space
             obs =  spaces.Dict({
                 "depth_image": self.depth_image_space,
@@ -397,7 +396,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
 
         # if none of the above, use the traditional observation space
         else:
-            use_kinect = False
+            use_zed2 = False
             self.observation_space = spaces.Dict({
                 'observation': self.observations,
                 'achieved_goal': self.achieved_goal_space,
@@ -439,7 +438,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         Init super class.
         """
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-                         real_time=True, action_cycle_time=action_cycle_time, use_kinect=use_kinect,
+                         real_time=True, action_cycle_time=action_cycle_time, use_zed2=use_zed2,
                          load_table=load_table)
 
         # for smoothing

@@ -9,7 +9,7 @@ from gymnasium.envs.registration import register
 import scipy.spatial
 
 # Custom robot env
-from rl_environments.rx200.sim.robot_envs import rx200_robot_sim
+from rl_environments.rx200.sim.robot_envs import rx200_robot_sim_zed2
 
 # core modules of the framework
 from multiros.utils import gazebo_core
@@ -22,14 +22,13 @@ from multiros.utils import ros_markers
 
 # Register your environment using the gymnasium register method to utilize gym.make("TaskEnv-v0").
 register(
-    id='RX200ReacherSim-v0',
-    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim:RX200ReacherEnv',
+    id='RX200Zed2ReacherSim-v0',
+    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_zed2_reach_sim:RX200ReacherEnv',
     max_episode_steps=1000,
 )
 
 """
-This is the v0 of the RX200 Reacher Task Environment.
-- uses the kinect v2 sensor
+This is the v0 of the RX200 Reacher Task Environment for ZED2 camera
 - option to use vision sensors - depth and rgb images
 - action space is joint positions of the robot arm or xyz position of the end effector. No gripper control
 - reward is sparse or dense
@@ -37,7 +36,7 @@ This is the v0 of the RX200 Reacher Task Environment.
 """
 
 
-class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
+class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
     """
     This Task env is for a simple Reach Task with the RX200 robot.
 
@@ -302,23 +301,23 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         # Define the traditional observation space
         self.observations = spaces.Box(low=low, high=high, dtype=np.float32)
 
-        # Define the depth image space (480x640 32FC1) - this uses 32-bit float
-        self.depth_image_space = spaces.Box(low=0, high=1, shape=(480, 640), dtype=np.float32)
+        # Define the depth image space (720x1280 32FC1) - this uses 32-bit float
+        self.depth_image_space = spaces.Box(low=0, high=1, shape=(720, 1280), dtype=np.float32)
 
-        # Define the image space (480x640X3 RGB images) - this uses 8-bit unsigned int
-        self.rgb_image_space = spaces.Box(low=0, high=255, shape=(480, 640, 3), dtype=np.uint8)
+        # Define the image space (720x1280X3 RGB images) - this uses 8-bit unsigned int
+        self.rgb_image_space = spaces.Box(low=0, high=255, shape=(720, 1280, 3), dtype=np.uint8)
 
         # Define the final observation space
         if self.normal_obs:
-            use_kinect = False  # to pass to the superclass
+            use_zed2 = False  # to pass to the superclass
             self.observation_space = self.observations
 
         elif self.rgb_obs:
-            use_kinect = True
+            use_zed2 = True
             self.observation_space = self.rgb_image_space
 
         elif self.rgb_plus_normal_obs:
-            use_kinect = True
+            use_zed2 = True
             # Define a combined observation space
             self.observation_space = spaces.Dict({
                 "rgb_image": self.rgb_image_space,
@@ -326,7 +325,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             })
 
         elif self.rgb_plus_depth_plus_normal_obs:
-            use_kinect = True
+            use_zed2 = True
             # Define a combined observation space
             self.observation_space = spaces.Dict({
                 "depth_image": self.depth_image_space,
@@ -336,7 +335,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         # if none of the above, use the traditional observation space
         else:
-            use_kinect = False
+            use_zed2 = False
             self.observation_space = self.observations
 
         """
@@ -375,7 +374,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         Init super class.
         """
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-                         real_time=True, action_cycle_time=action_cycle_time, use_kinect=use_kinect,
+                         real_time=True, action_cycle_time=action_cycle_time, use_zed2=use_zed2,
                          load_table=load_table)
 
         # for smoothing
