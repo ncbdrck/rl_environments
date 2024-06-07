@@ -80,7 +80,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
     def __init__(self, launch_gazebo: bool = True, new_roscore: bool = True, roscore_port: str = None,
                  gazebo_paused: bool = False, gazebo_gui: bool = False, seed: int = None, reward_type: str = "sparse",
                  delta_action: bool = True, delta_coeff: float = 0.05, ee_action_type: bool = False,
-                 environment_loop_rate: float = 10, action_cycle_time: float = 0.100,
+                 environment_loop_rate: float = 10.0, action_cycle_time: float = 0.800,
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
                  load_table: bool = True, debug: bool = False, log_internal_state: bool = False,
@@ -611,6 +611,12 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         Returns:
             achieved_goal: EE position
         """
+        # ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
+        # achieved_goal = np.array(
+        #     [ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        #
+        # return achieved_goal.copy()
+
         return self.ee_pos.copy()
 
     def _get_desired_goal(self):
@@ -635,7 +641,18 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             reward (float): The reward for achieving the given goal.
         """
         # check if we are using this with HER
-        is_her = info.get('is_her', False)  # this is set in the HER sampler (my custom implementation)
+        if info is not None:
+            is_her = info.get('is_her', False)  # this is set in the HER sampler (my custom implementation)
+        else:
+            is_her = False
+
+        # Handle multiple goals for HER
+        if is_her:
+            rospy.loginfo("Using HER reward calculation!")
+            rewards = []
+            for ag, dg in zip(achieved_goal, desired_goal):
+                rewards.append(self.calculate_reward(ag, dg))
+            return np.array(rewards)
 
         reward = None
         if self.reward_r is not None and not is_her:
@@ -797,6 +814,9 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
                     self.within_goal_space = False
 
             else:
+                # print we failed in red colour
+                print("\033[91m" + "Set action failed for --->: " + str(action) + "\033[0m")
+
                 rospy.logdebug(f"Set action failed for --->: {action}")
                 self.movement_result = False
                 self.within_goal_space = False
@@ -852,7 +872,10 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
                 self.within_goal_space = True
 
             else:
+                # print we failed in red colour
+                print("\033[91m" + "Set action failed for --->: " + str(action) + "\033[0m")
                 rospy.logdebug(f"Set action failed for --->: {action}")
+
                 self.movement_result = False
                 self.within_goal_space = False
 
@@ -950,7 +973,24 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         reward = 0.0
 
         # check if we are using this with HER
-        is_her = info.get('is_her', False)
+        if info is not None:
+            is_her = info.get('is_her', False)
+        else:
+            is_her = False
+
+        # we don't need to do this but better to check
+        if desired_goal is None:
+            desired_goal = self.reach_goal
+
+        # check if the achieved_goal is None
+        if achieved_goal is None:
+            # check if the ee position is None
+            if self.ee_pos is not None:
+                achieved_goal = self.ee_pos
+            else:
+                ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
+                achieved_goal = np.array(
+                    [ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
 
         # if it's "Sparse" reward structure
         if self.reward_arc == "Sparse":
