@@ -690,13 +690,23 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         terminated = self.terminated_r
         self.info = self.info_r  # we can use this to log the success rate in stable baselines3
 
+        # check if self.info have the is_success key
+        # double-checking here
+        if "is_success" not in self.info:
+            if terminated:
+                self.info["is_success"] = True
+            else:
+                self.info["is_success"] = False
+
         # incase we don't have a done yet for real time envs
         # unnecessary to check since we never set the terminated to None
         if terminated is None:
             terminated = self.check_if_done()
 
             if terminated:
-                self.info["is_success"] = 1.0  # explicitly set the success rate
+                self.info["is_success"] = True  # explicitly set the success rate
+            else:
+                self.info["is_success"] = False
 
         return terminated
 
@@ -1122,7 +1132,9 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
 
             self.current_action = None  # we don't need to execute any more actions
             self.init_done = False  # we don't need to execute the loop until we reset the env
-            self.info_r['is_success'] = 1.0
+            self.info_r['is_success'] = True
+        else:
+            self.info_r['is_success'] = False
 
         return done
 
