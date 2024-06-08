@@ -71,7 +71,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         * rgb_plus_depth_plus_normal_obs: Whether to use RGB image, Depth image and traditional observations or not.
         * load_table: Whether to load the table model or not.
         * debug: Whether to print debug messages or not.
-        * log_internal_state: Whether to log the internal state of the environment or not. (action cycle time, etc.)
+        * log_internal_state: Whether to log the internal state of the environment or not.
         * action_speed: set the speed to complete the trajectory. default in 0.5 seconds
         * simple_dense_reward: Whether to use a simple dense reward or not.
     """
@@ -152,6 +152,11 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
             rospy.logerr("The environment loop rate is greater than the action cycle time. Exiting the program!")
             rospy.signal_shutdown("Exiting the program!")
             exit()
+
+        """
+        log internal state - using rospy loginfo, logwarn, logerr
+        """
+        self.log_internal_state = log_internal_state
 
         """
         Reward Architecture
@@ -492,7 +497,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
             1. Move the Robot to Home position
             2. Find a valid random reach goal
         """
-        rospy.loginfo("Initialising the init params!")
+        if self.log_internal_state:
+            rospy.loginfo("Initialising the init params!")
 
         # Initial robot pose - Home
         self.init_pos = np.array([0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
@@ -514,7 +520,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         self.move_RX200_object.stop_arm()
         self.movement_result = self.move_RX200_object.set_trajectory_joints(self.init_pos)
         if not self.movement_result:
-            rospy.logwarn("Homing failed!")
+            if self.log_internal_state:
+                rospy.logwarn("Homing failed!")
 
         #  Get a random Reach goal - np.array
         # goal_found, goal_vector = self.get_random_goal()  # this checks if the goal is reachable using moveit
@@ -522,12 +529,14 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
 
         if goal_found:
             self.reach_goal = goal_vector
-            rospy.loginfo("Reach Goal--->" + str(self.reach_goal))
+            if self.log_internal_state:
+                rospy.loginfo("Reach Goal--->" + str(self.reach_goal))
 
         else:
             # fake Reach goal - hard code one
             self.reach_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
-            rospy.logwarn("Hard Coded Reach Goal--->" + str(self.reach_goal))
+            if self.log_internal_state:
+                rospy.logwarn("Hard Coded Reach Goal--->" + str(self.reach_goal))
 
         # Publish the goal pos
         self.goal_marker.set_position(position=self.reach_goal)
@@ -546,8 +555,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         self.prev_action = self.init_pos.copy()  # for observation
 
         # We can start the environment loop now
-
-        rospy.loginfo("Start resetting the env loop!")
+        if self.log_internal_state:
+            rospy.loginfo("Start resetting the env loop!")
 
         # init the real time variables
         self.obs_r = None
@@ -561,12 +570,14 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
             self.loop_counter = 0
             self.action_counter = 0
 
-        rospy.loginfo("Done resetting the env loop!")
+        if self.log_internal_state:
+            rospy.loginfo("Done resetting the env loop!")
 
         self.init_done = True
         # self.current_action = self.init_pos.copy()
 
-        rospy.loginfo("Initialising init params done--->")
+        if self.log_internal_state:
+            rospy.loginfo("Initialising init params done--->")
 
     def _set_action(self, action):
         """
@@ -578,7 +589,9 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         # save the action for observation
         self.prev_action = action.copy()
 
-        rospy.loginfo(f"Applying real-time action---> {action}")
+        if self.log_internal_state:
+            rospy.loginfo(f"Applying real-time action---> {action}")
+
         self.current_action = action.copy()
 
         # for debugging
@@ -643,7 +656,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
 
         # Handle multiple goals for HER
         if is_her:
-            rospy.loginfo("Using HER reward calculation!")
+            if self.log_internal_state:
+                rospy.loginfo("Using HER reward calculation!")
             rewards = []
             for ag, dg in zip(achieved_goal, desired_goal):
                 rewards.append(self.calculate_reward(ag, dg))
@@ -717,7 +731,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         if self.init_done:
 
             if self.debug:
-                rospy.loginfo(f"Starting RL loop --->: {self.loop_counter}")
+                if self.log_internal_state:
+                    rospy.loginfo(f"Starting RL loop --->: {self.loop_counter}")
                 self.loop_counter += 1
 
             # start with the observation, reward, done and info
@@ -732,7 +747,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
                 self.execute_action(self.current_action)
 
                 if self.debug:
-                    rospy.loginfo(f"Executing action --->: {self.action_counter}")
+                    if self.log_internal_state:
+                        rospy.loginfo(f"Executing action --->: {self.action_counter}")
                     self.action_counter += 1
             else:
                 self.move_RX200_object.stop_arm()  # stop the arm if there is no action
@@ -747,7 +763,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         Args:
             action: The action to be applied to the robot.
         """
-        rospy.loginfo(f"Action --->: {action}")
+        if self.log_internal_state:
+            rospy.loginfo(f"Action --->: {action}")
 
         # --- Set the action based on the action type
         # --- EE action
@@ -803,15 +820,17 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
                     self.within_goal_space = True
 
                 else:
-                    rospy.logwarn(f"The action: {action} is not reachable!")
-                    rospy.logdebug(f"Set action failed for --->: {action}")
+                    if self.log_internal_state:
+                        rospy.logwarn(f"The action: {action} is not reachable!")
+                        rospy.logdebug(f"Set action failed for --->: {action}")
                     self.movement_result = False
                     self.within_goal_space = False
 
             else:
                 # print we failed in red colour
-                print("\033[91m" + "Set action failed for --->: " + str(action) + "\033[0m")
-                rospy.logdebug(f"Set action failed for --->: {action}")
+                if self.log_internal_state:
+                    print("\033[91m" + "Set action failed for --->: " + str(action) + "\033[0m")
+                    rospy.logdebug(f"Set action failed for --->: {action}")
 
                 self.movement_result = False
                 self.within_goal_space = False
@@ -855,10 +874,14 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
 
             # clip the action
             if self.debug:
-                rospy.logwarn(f"Action + current joint_values before clip --->: {action}")
+                if self.log_internal_state:
+                    rospy.logwarn(f"Action + current joint_values before clip --->: {action}")
+
             action = np.clip(action, self.min_joint_values, self.max_joint_values)
+
             if self.debug:
-                rospy.logwarn(f"Action + current joint_values after clip --->: {action}")
+                if self.log_internal_state:
+                    rospy.logwarn(f"Action + current joint_values after clip --->: {action}")
 
             # check if the action is within the workspace
             if self.check_action_within_workspace(action):
@@ -868,8 +891,9 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
 
             else:
                 # print we failed in red colour
-                print("\033[91m" + "Set action failed for --->: " + str(action) + "\033[0m")
-                rospy.logdebug(f"Set action failed for --->: {action}")
+                if self.log_internal_state:
+                    print("\033[91m" + "Set action failed for --->: " + str(action) + "\033[0m")
+                    rospy.logdebug(f"Set action failed for --->: {action}")
 
                 self.movement_result = False
                 self.within_goal_space = False
@@ -924,7 +948,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
                               self.prev_action, self.current_joint_velocities), axis=None)
 
-        rospy.loginfo(f"Observations --->: {obs}")
+        if self.log_internal_state:
+            rospy.loginfo(f"Observations --->: {obs}")
 
         if self.normal_obs:
             return obs.copy()
@@ -1010,7 +1035,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
             self.goal_marker.publish()
 
             # log the reward
-            rospy.logwarn(">>>REWARD>>>" + str(reward))
+            if self.log_internal_state:
+                rospy.logwarn(">>>REWARD>>>" + str(reward))
 
         # Since we only look for Sparse or Dense, we don't need to check if it's Dense
         else:
@@ -1060,7 +1086,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
                     reward += self.none_exe_reward
 
             # log the reward
-            rospy.logwarn(">>>REWARD>>>" + str(reward))
+            if self.log_internal_state:
+                rospy.logwarn(">>>REWARD>>>" + str(reward))
 
         return reward
 
@@ -1089,7 +1116,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         done_reach = self.check_if_reach_done(self.ee_pos, self.reach_goal)
 
         if done_reach:
-            rospy.loginfo(GREEN + ">>>>>>>>>>>> Reached the Goal! >>>>>>>>>>>" + ENDC)
+            if self.log_internal_state:
+                rospy.loginfo(GREEN + ">>>>>>>>>>>> Reached the Goal! >>>>>>>>>>>" + ENDC)
             done = True
 
             self.current_action = None  # we don't need to execute any more actions
@@ -1120,11 +1148,13 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         """
         Function to check if the given goal is reachable
         """
-        rospy.logdebug(f"Goal to check: {str(goal)}")
+        if self.log_internal_state:
+            rospy.logdebug(f"Goal to check: {str(goal)}")
         result = self.check_goal(goal)
 
         if not result:
-            rospy.logdebug("The goal is not reachable")
+            if self.log_internal_state:
+                rospy.logdebug("The goal is not reachable")
 
         return result
 
@@ -1139,7 +1169,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
             if self.test_goal_pos(goal):
                 return True, goal
 
-        rospy.logdebug("Getting a random goal failed!")
+        if self.log_internal_state:
+            rospy.logdebug("Getting a random goal failed!")
 
         return False, None
 
@@ -1161,13 +1192,16 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         if ee_pos is not None:
             # check if the ee pose is within the goal space - using self.goal_space
             if self.goal_space.contains(ee_pos):
-                rospy.logdebug(f"The ee pose of the {action} is within the goal space!")
+                if self.log_internal_state:
+                    rospy.logdebug(f"The ee pose of the {action} is within the goal space!")
                 return True
             else:
-                rospy.logdebug(f"The ee pose of the {ee_pos} is not within the goal space!")
+                if self.log_internal_state:
+                    rospy.logdebug(f"The ee pose of the {ee_pos} is not within the goal space!")
                 return False
 
-        rospy.logwarn("Checking if the action is within the goal space failed!")
+        if self.log_internal_state:
+            rospy.logwarn("Checking if the action is within the goal space failed!")
         return False
 
     def check_action_within_workspace(self, action):
@@ -1193,17 +1227,20 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         if ee_pos is not None:
             # check if the ee pose is within the workspace - using self.workspace_space
             if self.workspace_space.contains(ee_pos):
-                rospy.logdebug(f"The ee pose {ee_pos} of the {action} is within the workspace!")
+                if self.log_internal_state:
+                    rospy.logdebug(f"The ee pose {ee_pos} of the {action} is within the workspace!")
                 if self.debug:
                     print(BLUE + f"The ee pose {ee_pos} of the {action} is within the workspace!" + ENDC)
                 return True
             else:
-                rospy.logdebug(f"The ee pose {ee_pos} is not within the workspace!")
+                if self.log_internal_state:
+                    rospy.logdebug(f"The ee pose {ee_pos} is not within the workspace!")
                 if self.debug:
                     print(BLUE + f"The ee pose {ee_pos} is not within the workspace!" + ENDC)
                 return False
 
-        rospy.logwarn("Checking if the action is within the workspace failed!")
+        if self.log_internal_state:
+            rospy.logwarn("Checking if the action is within the workspace failed!")
         if self.debug:
             print(BLUE + "Checking if the action is within the workspace failed!" + ENDC)
         return False
@@ -1220,13 +1257,16 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
 
             # check if the z is within the limits
             if ee_pos[2] > self.lowest_z:
-                rospy.logdebug(f"The ee pose {ee_pos} of the {action} is within the z limit!")
+                if self.log_internal_state:
+                    rospy.logdebug(f"The ee pose {ee_pos} of the {action} is within the z limit!")
                 return True
             else:
-                rospy.logdebug(f"The ee pose {ee_pos} is not within the z limit!")
+                if self.log_internal_state:
+                    rospy.logdebug(f"The ee pose {ee_pos} is not within the z limit!")
                 return False
         else:
-            rospy.logwarn("Checking if the action is within the z limit failed!")
+            if self.log_internal_state:
+                rospy.logwarn("Checking if the action is within the z limit failed!")
             return False
 
     def _get_params(self):
