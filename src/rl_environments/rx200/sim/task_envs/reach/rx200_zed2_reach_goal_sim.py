@@ -643,25 +643,31 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         Args:
             achieved_goal: EE position
             desired_goal: Reach Goal
-            info (dict): Additional information about the environment.
+            info (dict|list): Additional information about the environment. A list for SB3 HER case.
 
         Returns:
             reward (float): The reward for achieving the given goal.
         """
-        # check if we are using this with HER
-        if info is not None:
+        is_her = False
+
+        # check if sb3 is using this with HER
+        if info is not None and isinstance(info, list):
+            is_her = True
+
+        # check if we are using this with HER - my custom implementation
+        elif info is not None and isinstance(info, dict):
             is_her = info.get('is_her', False)  # this is set in the HER sampler (my custom implementation)
-        else:
-            is_her = False
 
         # Handle multiple goals for HER
         if is_her:
             if self.log_internal_state:
                 rospy.loginfo("Using HER reward calculation!")
-            rewards = []
-            for ag, dg in zip(achieved_goal, desired_goal):
-                rewards.append(self.calculate_reward(ag, dg))
-            return np.array(rewards)
+
+            # we need to set the info to a dict with is_her key as True
+            info_tmp = {"is_her": True}
+
+            rewards = [self.calculate_reward(ag, dg, info_tmp) for ag, dg in zip(achieved_goal, desired_goal)]
+            return np.array(rewards, dtype=np.float32)
 
         reward = None
         if self.reward_r is not None and not is_her:
@@ -956,7 +962,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
 
         # our observations
         obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
-                              self.prev_action, self.current_joint_velocities), axis=None)
+                              self.prev_action, self.current_joint_velocities), axis=None, dtype=np.float32)
 
         if self.log_internal_state:
             rospy.loginfo(f"Observations --->: {obs}")
@@ -1028,76 +1034,93 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
             # initialise the sparse reward as negative
             reward = -1.0
 
-            # The marker only turns green if reach is done. Otherwise, it is red.
-            self.goal_marker.set_color(r=1.0, g=0.0)
-            self.goal_marker.set_duration(duration=5)
+            #  if her we don't need to publish the goal marker
+            if is_her:
+                # check if robot reached the goal
+                reach_done = self.check_if_reach_done(achieved_goal, desired_goal)
 
-            # check if robot reached the goal
-            reach_done = self.check_if_reach_done(achieved_goal, desired_goal)
+                if reach_done:
+                    reward = 1.0
 
-            if reach_done:
-                reward = 1.0
+            else:
+                # The marker only turns green if reach is done. Otherwise, it is red.
+                self.goal_marker.set_color(r=1.0, g=0.0)
+                self.goal_marker.set_duration(duration=5)
 
-                # done (green) goal_marker
-                self.goal_marker.set_color(r=0.0, g=1.0)
+                # check if robot reached the goal
+                reach_done = self.check_if_reach_done(achieved_goal, desired_goal)
 
-            # publish the marker to the topic
-            self.goal_marker.publish()
+                if reach_done:
+                    reward = 1.0
 
-            # log the reward
-            if self.log_internal_state:
-                rospy.logwarn(">>>REWARD>>>" + str(reward))
+                    # done (green) goal_marker
+                    self.goal_marker.set_color(r=0.0, g=1.0)
+
+                # publish the marker to the topic
+                self.goal_marker.publish()
+
+                # log the reward
+                if self.log_internal_state:
+                    rospy.logwarn(">>>REWARD>>>" + str(reward))
 
         # Since we only look for Sparse or Dense, we don't need to check if it's Dense
         else:
-            # in case of simple dense reward or HER
-            if self.simple_dense_reward or is_her:
+
+            # if her we don't need to publish the goal marker, and we always do simple dense reward
+            if is_her:
                 # - Distance from EE to goal reward
                 dist2goal = scipy.spatial.distance.euclidean(achieved_goal, desired_goal)
                 reward += - dist2goal
 
-            # for normal dense reward
             else:
-
-                # - Check if the EE reached the goal
-                done = self.check_if_reach_done(achieved_goal, desired_goal)
-
-                if done:
-                    # EE reached the goal
-                    reward += self.reached_goal_reward
-
-                    # done (green) goal_marker
-                    self.goal_marker.set_color(r=0.0, g=1.0)
-                    self.goal_marker.set_duration(duration=5)
-
-                else:
-                    # not done (red) goal_marker
-                    self.goal_marker.set_color(r=1.0, g=0.0)
-                    self.goal_marker.set_duration(duration=5)
-
+                # in case of simple dense reward or HER
+                if self.simple_dense_reward:
                     # - Distance from EE to goal reward
                     dist2goal = scipy.spatial.distance.euclidean(achieved_goal, desired_goal)
-                    reward += - self.mult_dist_reward * dist2goal
+                    reward += - dist2goal
 
-                    # - Constant step reward
-                    reward += self.step_reward
+                # for normal dense reward
+                else:
 
-                # publish the goal marker
-                self.goal_marker.publish()
+                    # - Check if the EE reached the goal
+                    done = self.check_if_reach_done(achieved_goal, desired_goal)
 
-                # - Check if actions are in limits
-                reward += self.action_not_in_limits * self.joint_limits_reward
+                    if done:
+                        # EE reached the goal
+                        reward += self.reached_goal_reward
 
-                # - Check if the action is within the goal space
-                reward += (not self.within_goal_space) * self.not_within_goal_space_reward
+                        # done (green) goal_marker
+                        self.goal_marker.set_color(r=0.0, g=1.0)
+                        self.goal_marker.set_duration(duration=5)
 
-                # to punish for actions where we cannot execute
-                if not self.movement_result:
-                    reward += self.none_exe_reward
+                    else:
+                        # not done (red) goal_marker
+                        self.goal_marker.set_color(r=1.0, g=0.0)
+                        self.goal_marker.set_duration(duration=5)
 
-            # log the reward
-            if self.log_internal_state:
-                rospy.logwarn(">>>REWARD>>>" + str(reward))
+                        # - Distance from EE to goal reward
+                        dist2goal = scipy.spatial.distance.euclidean(achieved_goal, desired_goal)
+                        reward += - self.mult_dist_reward * dist2goal
+
+                        # - Constant step reward
+                        reward += self.step_reward
+
+                    # publish the goal marker
+                    self.goal_marker.publish()
+
+                    # - Check if actions are in limits
+                    reward += self.action_not_in_limits * self.joint_limits_reward
+
+                    # - Check if the action is within the goal space
+                    reward += (not self.within_goal_space) * self.not_within_goal_space_reward
+
+                    # to punish for actions where we cannot execute
+                    if not self.movement_result:
+                        reward += self.none_exe_reward
+
+                # log the reward
+                if self.log_internal_state:
+                    rospy.logwarn(">>>REWARD>>>" + str(reward))
 
         return reward
 
