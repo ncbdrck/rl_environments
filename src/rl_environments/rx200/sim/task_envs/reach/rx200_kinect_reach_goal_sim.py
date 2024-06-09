@@ -975,9 +975,14 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         self.joint_values = self.get_joint_angles()  # Get a float list
         # we don't need to convert this to numpy array since we concat using numpy below
 
+        if self.prev_action is None:
+            prev_action = self.joint_values.copy()
+        else:
+            prev_action = self.prev_action.copy()
+
         # our observations
         obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
-                              self.prev_action, self.current_joint_velocities), axis=None, dtype=np.float32)
+                              prev_action, self.current_joint_velocities), axis=None)
 
         if self.log_internal_state:
             rospy.loginfo(f"Observations --->: {obs}")
