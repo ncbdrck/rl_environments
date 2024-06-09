@@ -838,7 +838,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         # our observations
         obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
-                              self.prev_action, self.current_joint_velocities), axis=None)
+                              self.prev_action, self.current_joint_velocities), axis=None, dtype=np.float32)
 
         if self.log_internal_state:
             rospy.loginfo(f"Observations --->: {obs}")
