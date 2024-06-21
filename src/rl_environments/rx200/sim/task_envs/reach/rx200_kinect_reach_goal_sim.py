@@ -980,6 +980,11 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         else:
             prev_action = self.prev_action.copy()
 
+        if self.joint_pos_all is None or self.current_joint_velocities is None:
+            done = False
+            while not done:
+                done = self._check_joint_states_ready()
+
         # our observations
         obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
                               prev_action, self.current_joint_velocities), axis=None)
