@@ -976,7 +976,13 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         # we don't need to convert this to numpy array since we concat using numpy below
 
         if self.prev_action is None:
-            prev_action = self.joint_values.copy()
+            # we can use the ee_pos as the previous action - for EE action type
+            if self.ee_action_type:
+                prev_action = self.ee_pos
+
+            # we can use the joint values as the previous action - for Joint action type
+            else:
+                prev_action = self.joint_values.copy()
         else:
             prev_action = self.prev_action.copy()
 
