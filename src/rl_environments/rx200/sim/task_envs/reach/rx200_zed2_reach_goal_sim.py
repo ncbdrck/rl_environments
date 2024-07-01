@@ -371,7 +371,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
             use_zed2 = True
 
             # Define a combined observation space
-            obs =  spaces.Dict({
+            obs = spaces.Dict({
                 "rgb_image": self.rgb_image_space,
                 "observations": self.observations
             })
@@ -386,7 +386,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         elif self.rgb_plus_depth_plus_normal_obs:
             use_zed2 = True
             # Define a combined observation space
-            obs =  spaces.Dict({
+            obs = spaces.Dict({
                 "depth_image": self.depth_image_space,
                 "rgb_image": self.rgb_image_space,
                 "observations": self.observations
@@ -542,8 +542,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         self.goal_marker.set_position(position=self.reach_goal)
         self.goal_marker.publish()
 
-        # get initial ee pos and joint values (we need this for delta actions)
-        # we don't need this because we reset env just before we start the episode (but just incase)
+        # get initial ee pos and joint values (we need this for delta actions or when we have EE action space)
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
         self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
         self.joint_values = self.get_joint_angles()
@@ -552,7 +551,10 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         self.action_not_in_limits = False
         self.within_goal_space = True
 
-        self.prev_action = self.init_pos.copy()  # for observation
+        if self.ee_action_type:
+            self.prev_action = self.ee_pos.copy()  # for observation
+        else:
+            self.prev_action = self.init_pos.copy()  # for observation
 
         # We can start the environment loop now
         if self.log_internal_state:
@@ -597,8 +599,6 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         # for debugging
         if self.debug:
             self.action_counter = 0  # reset the action counter
-
-
 
     def _get_observation(self):
         """

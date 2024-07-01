@@ -481,8 +481,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         self.goal_marker.set_position(position=self.reach_goal)
         self.goal_marker.publish()
 
-        # get initial ee pos and joint values (we need this for delta actions)
-        # we don't need this because we reset env just before we start the episode (but just incase)
+        # get initial ee pos and joint values (we need this for delta actions or when we have EE action space)
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
         self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
         self.joint_values = self.get_joint_angles()
@@ -491,7 +490,10 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         self.action_not_in_limits = False
         self.within_goal_space = True
 
-        self.prev_action = self.init_pos.copy()  # for observation
+        if self.ee_action_type:
+            self.prev_action = self.ee_pos.copy()  # for observation
+        else:
+            self.prev_action = self.init_pos.copy()  # for observation
 
         # We can start the environment loop now
         if self.log_internal_state:
@@ -536,7 +538,6 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         # for debugging
         if self.debug:
             self.action_counter = 0  # reset the action counter
-
 
     def _get_observation(self):
         """
@@ -819,7 +820,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
         self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
         self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                 ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])
+                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])
 
         # --- Linear distance to the goal
         linear_dist_ee_goal = current_goal - self.ee_pos  # goal is box dtype and ee_pos is numpy.array. It is okay
