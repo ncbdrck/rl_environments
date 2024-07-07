@@ -249,3 +249,71 @@ register(
 
 
 
+
+
+# ============================ RX200 Push Multiros Environments ============================
+# ************************** RX200 Push Multiros Default Environments - Kinect **************************
+
+# RX200 Push Multiros Default Environment
+register(
+    id='RX200PushSim-v0',
+    entry_point='rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim:RX200PushEnv',
+    max_episode_steps=100,
+)
+
+# RX200 Push Multiros Default Environment - ee action space
+register(
+    id='RX200PushEESim-v0',
+    entry_point='rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim:RX200PushEnv',
+    max_episode_steps=100,
+    kwargs={'ee_action_type': True}
+)
+
+# RX200 Push Multiros default Environment with RGB Observation - using kinect v2
+register(
+    id='RX200kinectPushSimRGB-v0',
+    entry_point='rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim:RX200PushEnv',
+    max_episode_steps=100,
+    kwargs={'rgb_obs_only': True, 'normal_obs_only': False}
+)
+
+# RX200 Push Multiros default Environment with RGB Observation - using kinect v2  - ee action space
+register(
+    id='RX200kinectPushEESimRGB-v0',
+    entry_point='rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim:RX200PushEnv',
+    max_episode_steps=100,
+    kwargs={'rgb_obs_only': True, 'normal_obs_only': False, 'ee_action_type': True}
+)
+
+# RX200 Push Multiros default Environment with RGB and Normal Observation - using kinect v2
+register(
+    id='RX200kinectPushSimRGBPlus-v0',
+    entry_point='rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim:RX200PushEnv',
+    max_episode_steps=100,
+    kwargs={'rgb_plus_normal_obs': True, 'normal_obs_only': False}
+)
+
+# RX200 Push Multiros default Environment with RGB and Normal Observation - using kinect v2  - ee action space
+register(
+    id='RX200kinectPushEESimRGBPlus-v0',
+    entry_point='rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim:RX200PushEnv',
+    max_episode_steps=100,
+    kwargs={'rgb_plus_normal_obs': True, 'normal_obs_only': False, 'ee_action_type': True}
+)
+
+# RX200 Push Multiros default Environment with RGB, Depth and Normal Observation - using kinect v2
+register(
+    id='RX200kinectPushSimRGBDepthPlus-v0',
+    entry_point='rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim:RX200PushEnv',
+    max_episode_steps=100,
+    kwargs={'rgb_plus_depth_plus_normal_obs': True, 'normal_obs_only': False}
+)
+
+# RX200 Push Multiros default Environment with RGB, Depth and Normal Observation - using kinect v2  - ee action space
+register(
+    id='RX200kinectPushEESimRGBDepthPlus-v0',
+    entry_point='rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim:RX200PushEnv',
+    max_episode_steps=100,
+    kwargs={'rgb_plus_depth_plus_normal_obs': True, 'normal_obs_only': False, 'ee_action_type': True}
+)
+

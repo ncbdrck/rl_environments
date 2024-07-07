@@ -7,6 +7,7 @@ import numpy as np
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 import scipy.spatial
+import tf.transformations
 
 # Custom robot env
 from rl_environments.rx200.sim.robot_envs import rx200_robot_sim
@@ -22,31 +23,31 @@ from multiros.utils import ros_markers
 
 # Register your environment using the gymnasium register method to utilize gym.make("TaskEnv-v0").
 register(
-    id='RX200ReacherSim-v0',
-    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim:RX200ReacherEnv',
+    id='RX200PushSim-v0',
+    entry_point='rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim:RX200PushEnv',
     max_episode_steps=1000,
 )
 
 """
-This is the v0 of the RX200 Reacher Task Environment.
+This is the v0 of the RX200 Push Task Environment.
 - uses the kinect v2 sensor
 - option to use vision sensors - depth and rgb images
 - action space is joint positions of the robot arm or xyz position of the end effector. No gripper control
 - reward is sparse or dense
-- goal is to reach a goal position
+- goal is to push a cube to a goal position
 """
 
 
-class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
+class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
     """
-    This Task env is for a simple Reach Task with the RX200 robot.
+    This Task env is for a simple push Task with the RX200 robot.
 
     The task is done if
-        * The robot reached the goal
+        * The cube reached the goal
 
     Here
         * Action Space - Continuous (5 actions for joints or 3 xyz position of the end effector)
-        * Observation - Continuous (28 obs or rgb/depth image or a combination)
+        * Observation - Continuous (obs or rgb/depth image or a combination)
 
     Init Args:
         * launch_gazebo: Whether to launch Gazebo or not. If False, it is assumed that Gazebo is already running.
@@ -71,6 +72,8 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         * action_speed: set the speed to complete the trajectory. default in 0.5 seconds
         * simple_dense_reward: Whether to use a simple dense reward or not.
         * log_internal_state: Whether to log the internal state of the environment or not.
+        * random_goal: Whether to use a random goal or not.
+        * random_cube_spawn: Whether to spawn the cube at a random position or not.
 
     """
 
@@ -81,7 +84,8 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
                  load_table: bool = True, debug: bool = False, action_speed: float = 0.5,
-                 simple_dense_reward: bool = True, log_internal_state: bool = False):
+                 simple_dense_reward: bool = True, log_internal_state: bool = False, random_goal: bool = False,
+                 random_cube_spawn: bool = True):
 
         """
         variables to keep track of ros, gazebo ports and gazebo pid
@@ -131,9 +135,9 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         # init the ros node
         if ros_port is not None:
-            self.node_name = "RX200ReacherEnvSim" + "_" + ros_port
+            self.node_name = "RX200PushEnv" + "_" + ros_port
         else:
-            self.node_name = "RX200ReacherEnvSim"
+            self.node_name = "RX200PushEnv"
 
         rospy.init_node(self.node_name, anonymous=True)
 
@@ -213,6 +217,12 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         self.ee_action_type = ee_action_type
 
         """
+        Goal and Cube spawn
+        """
+        self.random_goal = random_goal
+        self.random_cube_spawn = random_cube_spawn
+
+        """
         Debug
         """
         self.debug = debug
@@ -222,7 +232,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         """
 
         # add to ros parameter server
-        ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="rx200_reach_task_config.yaml", ns="/")
+        ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="rx200_push_task_config.yaml", ns="/")
         self._get_params()
 
         """
@@ -252,13 +262,16 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         # typical observation
         01. EE pos - 3
-        02. Vector to the goal (normalized linear distance) - 3
-        03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5 or 3 (joint or ee)
-        06. Joint velocities - 8
+        02. EE rpy - 3
+        03. Vector to the goal (normalized linear distance) - 3
+        04. Euclidian distance (cube to push goal)- 1
+        05. Current Joint values - 8
+        06. Previous action - 5 or 3 (joint or ee)
+        07. Joint velocities - 8  # I don't think we need this since we're not using velocity control
+        08. Cube pos - 3
+        09. Cube rpy - 3
 
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+        total: (3x5) + 1 + (5 or 3) + (8x2) = 37 or 35
 
         # depth image
         480x640 32FC1
@@ -272,6 +285,12 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             np.array([self.position_ee_max["x"], self.position_ee_max["y"], self.position_ee_max["z"]]))
         observations_low_ee_pos_range = np.array(
             np.array([self.position_ee_min["x"], self.position_ee_min["y"], self.position_ee_min["z"]]))
+
+        # ----- ee rpy
+        observations_high_ee_rpy = np.array(
+            np.array([self.rpy_ee_max["r"], self.rpy_ee_max["p"], self.rpy_ee_max["y"]]))
+        observations_low_ee_rpy = np.array(
+            np.array([self.rpy_ee_min["r"], self.rpy_ee_min["p"], self.rpy_ee_min["y"]]))
 
         # ---- vector to the goal - normalized linear distance
         observations_high_vec_ee_goal = np.array([1.0, 1.0, 1.0])
@@ -297,13 +316,27 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         observations_high_joint_vel = self.max_joint_vel.copy()
         observations_low_joint_vel = self.min_joint_vel.copy()
 
+        # ---- cube pos
+        observations_high_cube_pos = np.array(
+            np.array([self.position_cube_max["x"], self.position_cube_max["y"], self.position_cube_max["z"]]))
+        observations_low_cube_pos = np.array(
+            np.array([self.position_cube_min["x"], self.position_cube_min["y"], self.position_cube_min["z"]]))
+
+        # ---- cube rpy
+        observations_high_cube_rpy = np.array(
+            np.array([self.rpy_cube_max["r"], self.rpy_cube_max["p"], self.rpy_cube_max["y"]]))
+        observations_low_cube_rpy = np.array(
+            np.array([self.rpy_cube_min["r"], self.rpy_cube_min["p"], self.rpy_cube_min["y"]]))
+
         high = np.concatenate(
-            [observations_high_ee_pos_range, observations_high_vec_ee_goal, observations_high_dist,
-             observations_high_joint_values, observations_high_prev_action, observations_high_joint_vel, ])
+            [observations_high_ee_pos_range, observations_high_ee_rpy, observations_high_vec_ee_goal,
+             observations_high_dist, observations_high_joint_values, observations_high_prev_action,
+             observations_high_joint_vel, observations_high_cube_pos, observations_high_cube_rpy, ])
 
         low = np.concatenate(
-            [observations_low_ee_pos_range, observations_low_vec_ee_goal, observations_low_dist,
-             observations_low_joint_values, observations_low_prev_action, observations_low_joint_vel, ])
+            [observations_low_ee_pos_range, observations_low_ee_rpy, observations_low_vec_ee_goal,
+             observations_low_dist, observations_low_joint_values, observations_low_prev_action,
+             observations_low_joint_vel, observations_low_cube_pos, observations_low_cube_rpy, ])
 
         # Define the traditional observation space
         self.observations = spaces.Box(low=low, high=high, dtype=np.float32)
@@ -347,6 +380,9 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         """
         Goal space for sampling
+        - default - not used for selecting a random goal
+        - used for spawning the cube at a random position in Gazebo - random_cube_spawn==True
+        - if specified, sample a goal within the specified range to push the cube to - random_goal==True
         """
         # ---- Goal pos
         high_goal_pos_range = np.array(
@@ -375,6 +411,8 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         Define subscribers/publishers and Markers as needed.
         """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
+                                                 lifetime=30.0)
+        self.cube_marker = ros_markers.RosMarker(frame_id="world", ns="cube", marker_type=2, marker_topic="cube_pos",
                                                  lifetime=30.0)
 
         """
@@ -415,7 +453,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         # for dense reward calculation
         self.action_not_in_limits = False
-        self.lowest_z = self.position_goal_min["z"]
+        self.lowest_z = self.workspace_min["z"]  # lowest z value in the workspace
         self.movement_result = False
         self.within_goal_space = False
 
@@ -433,14 +471,22 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         Here we
             1. Move the Robot to Home position
-            2. Find a valid random reach goal
+            2. Find a valid random position to spawn cube
+            3. Spawn the cube in Gazebo
+            4. Fina random goal position to push the cube to if random_goal is True
+            5. Publish the goal position and cube position as markers
 
         """
         if self.log_internal_state:
             rospy.loginfo("Initialising the init params!")
 
-        # Initial robot pose - Home
+        # --------------- Initial robot pose - Home
         self.init_pos = np.array([0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+
+        # close the gripper
+        self.init_close_gripper = np.array([0.018, -0.018], dtype=np.float32)
+        # open the gripper (not used)
+        self.init_open_gripper = np.array([0.036, -0.036], dtype=np.float32)
 
         # make the current action None to stop execution for real time envs and also stop the env loop
         self.init_done = False  # we don't need to execute the loop until we reset the env
@@ -458,41 +504,72 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         # we define the movement result here so that we can use it in the environment loop (we need it for dense reward)
         self.move_RX200_object.stop_arm()
         self.movement_result = self.move_RX200_object.set_trajectory_joints(self.init_pos)
+        self.movement_result = self.move_RX200_object.set_gripper_joints(self.init_close_gripper)
         if not self.movement_result:
             if self.log_internal_state:
                 rospy.logwarn("Homing failed!")
 
-        #  Get a random Reach goal - np.array
-        # goal_found, goal_vector = self.get_random_goal()  # this checks if the goal is reachable using moveit
-        goal_found, goal_vector = self.get_random_goal_no_check()
+        # --------------- Remove and Spawn the cube
+        # remove the cube
+        self.remove_cube_in_gazebo()
 
-        if goal_found:
-            self.reach_goal = goal_vector
-            if self.log_internal_state:
-                rospy.loginfo("Reach Goal--->" + str(self.reach_goal))
+        # spwan the cube
+        if self.random_cube_spawn:
+            #  Get a random pos - np.array
+            cube_init_vector = self.get_random_cube_init_pose()
 
+        # if we don't spwan cube randomly, we can hard code one
         else:
-            # fake Reach goal - hard code one
-            self.reach_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
-            if self.log_internal_state:
-                rospy.logwarn("Hard Coded Reach Goal--->" + str(self.reach_goal))
+            # Static cube position - hard code one
+            cube_init_vector= np.array([0.180, 0.000, 0.015], dtype=np.float32)
+
+        # spawn the cube
+        self.spawn_cube_in_gazebo(model_pos_x=cube_init_vector[0],
+                                  model_pos_y=cube_init_vector[1])
+        if self.log_internal_state:
+            rospy.logwarn("Hard Coded Cube init pos--->" + str(cube_init_vector))
+
+        # Publish the cube pos
+        self.cube_marker.set_position(position=cube_init_vector)  #  so we can see the cube in rviz
+        self.cube_marker.publish()
+
+        # --------------- Random Push Goal
+        if self.random_goal:
+            #  Get a random pos - np.array
+            self.push_goal = self.get_random_goal_no_check()
+
+        # if we don't have a random push goal, we can hard code one
+        else:
+            # fake push goal - hard code one
+            # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
+            self.push_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
+
+
+        if self.log_internal_state:
+            rospy.logwarn("Hard Coded Push Goal--->" + str(self.push_goal))
 
         # Publish the goal pos
-        self.goal_marker.set_position(position=self.reach_goal)
+        self.goal_marker.set_position(position=self.push_goal)
         self.goal_marker.publish()
 
-        # get initial ee pos and joint values (we need this for delta actions)
-        # we don't need this because we reset env just before we start the episode (but just incase)
+        #  --------------- Set init values for reward calculation and observation
+        # get initial ee pos and joint values (we need this for delta actions or when we have EE action space)
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
         self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
+                               ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # for IK calculation - EE actions
         self.joint_values = self.get_joint_angles()
 
         # for dense reward calculation
         self.action_not_in_limits = False
         self.within_goal_space = True
 
-        self.prev_action = self.init_pos.copy()  # for observation
+        if self.ee_action_type:
+            self.prev_action = self.ee_pos.copy()  # for observation
+        else:
+            self.prev_action = self.init_pos.copy()  # for observation
 
+        #  --------------- Set init values for the environment loop
         # We can start the environment loop now
         if self.log_internal_state:
             rospy.loginfo("Start resetting the env loop!")
@@ -795,13 +872,17 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         # traditional observations
         01. EE pos - 3
-        02. Vector to the goal (normalized linear distance) - 3
-        03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5 or 3 (joint or ee)
-        06. Joint velocities - 8
+        02. EE rpy - 3
+        03. Vector to the goal (normalized linear distance) - 3
+        04. Euclidian distance (cube to push goal)- 1
+        05. Current Joint values - 8
+        06. Previous action - 5 or 3 (joint or ee)
+        07. Joint velocities - 8
+        08. Cube pos - 3
+        09. Cube rpy - 3
 
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+
+        total: (3x5) + 1 + (5 or 3) + (8x2) = 37 or 35
 
         # depth image
         480x640 32FC1
@@ -812,22 +893,43 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         Returns:
             An observation representing the current state of the environment.
         """
-        current_goal = self.reach_goal
+        # --- Get the current goal
+        current_goal = self.push_goal
+
+        # --- Get the current cube position and orientation
+        cube_pose_done, self.cube_pos, self.cube_ori = self.get_model_pose()
+
+        # if the cube pose is not found, we can set the current cube pos to 0
+        # we need to set this to 0 so that we can get the observations
+        if not cube_pose_done:
+            if self.log_internal_state:
+                rospy.logwarn("Cube pose not found!")
+            self.cube_pos = np.array([0.0, 0.0, 0.0])
+            self.cube_ori = np.array([0.0, 0.0, 0.0])
+
+        # publish the cube pos marker
+        self.cube_marker.set_position(position=self.cube_pos)
+        self.cube_marker.set_color(r=0.0, g=0.0, b=1.0)  # let's make marker colour blue
+        self.cube_marker.set_duration(duration=5)
+        self.cube_marker.publish()
 
         # --- 1. Get EE position
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
         self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+
+        # --- 2. Get EE orientation
         self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])
+                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # we need this for IK
+        ee_ori_rpy = self.quaternion_to_euler(self.ee_ori)
 
         # --- Linear distance to the goal
-        linear_dist_ee_goal = current_goal - self.ee_pos  # goal is box dtype and ee_pos is numpy.array. It is okay
+        linear_dist_ee_goal = current_goal - self.cube_pos  # goal is box dtype and ee_pos is numpy.array. It is okay
 
-        # --- 2. Vector to goal (we are giving only the direction vector)
+        # --- 3. Vector to goal (we are giving only the direction vector)
         vec_ee_goal = linear_dist_ee_goal / np.linalg.norm(linear_dist_ee_goal)
 
-        # --- 3. Euclidian distance
-        euclidean_distance_ee_goal = scipy.spatial.distance.euclidean(self.ee_pos, current_goal)  # float
+        # --- 4. Euclidian distance
+        euclidean_distance_cube_goal = scipy.spatial.distance.euclidean(self.cube_pos, current_goal)  # float
 
         # --- Get Current Joint values - only for the joints we are using
         #  we need this for delta actions
@@ -835,9 +937,28 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         self.joint_values = self.get_joint_angles()  # Get a float list
         # we don't need to convert this to numpy array since we concat using numpy below
 
+        # --- 6. Get the previous action
+        if self.prev_action is None:
+            # we can use the ee_pos as the previous action - for EE action type
+            if self.ee_action_type:
+                prev_action = self.ee_pos
+
+            # we can use the joint values as the previous action - for a Joint action type
+            else:
+                prev_action = self.joint_values.copy()
+        else:
+            prev_action = self.prev_action.copy()
+
+        # --- Get the joint velocities and joint positions using the joint_states topic
+        if self.joint_pos_all is None or self.current_joint_velocities is None:
+            done = False
+            while not done:
+                done = self._check_joint_states_ready()
+
         # our observations
-        obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
-                              self.prev_action, self.current_joint_velocities), axis=None, dtype=np.float32)
+        obs = np.concatenate((self.ee_pos, ee_ori_rpy, vec_ee_goal, euclidean_distance_cube_goal,
+                              self.joint_pos_all, prev_action, self.current_joint_velocities,
+                              self.cube_pos, self.cube_ori), axis=None, dtype=np.float32)
 
         if self.log_internal_state:
             rospy.loginfo(f"Observations --->: {obs}")
@@ -878,8 +999,8 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         # - Init reward
         reward = 0.0
 
-        achieved_goal = self.ee_pos
-        desired_goal = self.reach_goal
+        achieved_goal = self.cube_pos
+        desired_goal = self.push_goal
 
         # if it's "Sparse" reward structure
         if self.reward_arc == "Sparse":
@@ -965,7 +1086,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         """
         Function to check if the episode is done.
 
-        The Task is done if the EE is close enough to the goal
+        The Task is done if the Cube is close enough to the goal
 
         Returns:
             A boolean value indicating whether the episode has ended
@@ -982,8 +1103,8 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         # --- Init done
         done = False
 
-        # - Check if the ee reached the goal
-        done_reach = self.check_if_reach_done(self.ee_pos, self.reach_goal)
+        # - Check if the Cube reached the goal
+        done_reach = self.check_if_reach_done(self.cube_pos, self.push_goal)
 
         if done_reach:
             if self.log_internal_state:
@@ -997,6 +1118,21 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             self.info_r['is_success'] = False
 
         return done
+
+    def quaternion_to_euler(self, quaternion):
+        """
+        Function to convert a quaternion to euler angles
+
+        args:
+            quaternion: a list of 4 elements representing a quaternion
+        """
+        # convert the quaternion to a rotation matrix
+        rot_matrix = tf.transformations.quaternion_matrix(quaternion)
+
+        # get the euler angles
+        euler = tf.transformations.euler_from_matrix(rot_matrix)
+
+        return euler
 
     def check_if_reach_done(self, achieved_goal, desired_goal):
         """
@@ -1037,6 +1173,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         """
         for i in range(max_tries):
             goal = self.goal_space.sample()
+            goal[2] = 0.015  # since the robot is mounted on a table
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1050,7 +1187,21 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         """
         Function to get a random goal without checking
         """
-        return True, self.goal_space.sample()
+        random_goal = self.goal_space.sample()
+        random_goal[2] = 0.015
+
+        return random_goal
+
+    def get_random_cube_init_pose(self):
+        """
+        Function to get a random cube pose for the initial position without checking
+
+        return: random_cube_pose
+        """
+        random_cube_pose = self.goal_space.sample()
+        random_cube_pose[2] = 0.015
+
+        return random_cube_pose
 
     # not used
     def check_action_within_goal_space_fk(self, action):
@@ -1161,6 +1312,10 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         self.max_joint_vel = rospy.get_param('/rx200/max_joint_vel')
         self.min_joint_angles = rospy.get_param('/rx200/min_joint_angles')
         self.max_joint_angles = rospy.get_param('/rx200/max_joint_angles')
+        self.position_cube_min = rospy.get_param('/rx200/position_cube_min')
+        self.position_cube_max = rospy.get_param('/rx200/position_cube_max')
+        self.rpy_cube_min = rospy.get_param('/rx200/rpy_cube_min')
+        self.rpy_cube_max = rospy.get_param('/rx200/rpy_cube_max')
 
         # Goal space
         self.position_goal_max = rospy.get_param('/rx200/position_goal_max')

@@ -19,7 +19,7 @@ rx200: #namespace
       - 2.14  # wrist_angle
       - 3.12  # wrist_rotate
 
-    # Define the minimum and maximum joint values for grasping (not used for the reach task)
+    # Define the minimum and maximum joint values for grasping (not used for the push task as we don't grasp)
     min_joint_pos_grasp:
       - -3.12  # waist
       - -1.88  # shoulder
@@ -58,16 +58,35 @@ rx200: #namespace
       p: -6.2832
       y: -6.2832
 
-    linear_distance_max: # Maximum distance from EE to the desired goal EE (spans 110cm)
+    position_cube_max: # Maximum XYZ position for the cube (since it can be with the gripper)
+      x: 0.55
+      y: 0.55
+      z: 0.55
+    position_cube_min: # Minimum XYZ position for the cube
+      x: -0.55
+      y: -0.55
+      z: 0.00
+
+    rpy_cube_max: # Maximum rpy for the cube
+      r: 6.28
+      p: 6.28
+      y: 6.28
+    rpy_cube_min: # Minimum rpy for the cube
+      r: -6.28
+      p: -6.28
+      y: -6.28
+
+    # not used in this task (so values are not set)
+    linear_distance_max: # Maximum distance from cube to the desired goal (spans 110cm)
       x: 1.00
       y: 1.00
       z: 0.50
-    linear_distance_min: # Minimum distance from EE to the desired goal E
+    linear_distance_min: # Minimum distance from cube to the desired goal
       x: -1.00
       y: -1.00
       z: -0.50
 
-    max_distance: 1.00 # Maximum distance from EE to the desired GOAL EE (50cm + 50cm)
+    max_distance: 0.55 # Maximum distance from cube to the desired GOAL (0.55m is the max reach of the robot)
 
     min_joint_angles:
       - -1.88  # elbow
@@ -111,13 +130,13 @@ rx200: #namespace
 
     # ******** goal space
     position_goal_max: # Maximum XYZ position for the goal
-      x: 0.25
+      x: 0.35
       y: 0.15
-      z: 0.25
+      z: 0.025  # we set this explicitly inside the script, so we are not using the value here
     position_goal_min: # Minimum XYZ position for the goal
       x: 0.15
       y: -0.15
-      z: 0.15
+      z: 0.015  # Near zero to prevent going below the table
 
     # ******** Workspace -  we need to restrict the workspace to prevent the robot from hitting the table or itself
     workspace_max: # Maximum XYZ position for the workspace
@@ -127,7 +146,7 @@ rx200: #namespace
     workspace_min: # Minimum XYZ position for the workspace
       x: 0.10
       y: -0.55
-      z: 0.10  # Near zero to prevent going below the table
+      z: 0.06  # Near zero to prevent going below the table (# todo: check this value)
 
 
     # ******** achieved_goal and desired_goal
@@ -159,7 +178,7 @@ rx200: #namespace
 
 
     # ******** Tolerance for the position of the goal
-    reach_tolerance: 0.02
+    reach_tolerance: 0.05
 
 
     # ******** Variables related to rewards
