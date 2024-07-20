@@ -317,3 +317,19 @@ register(
     kwargs={'rgb_plus_depth_plus_normal_obs': True, 'normal_obs_only': False, 'ee_action_type': True}
 )
 
+
+# ---------------------------- Real Environments  ----------------------------
+# ============================ RX200 Reacher RealROS Environments ============================
+# RX200 Reacher RealROS Environment - Default
+register(
+    id='RX200ReacherReal-v0',
+    entry_point='rl_environments.rx200.real.task_envs.reach.rx200_reach_real:RX200ReacherEnv',
+    max_episode_steps=100,
+)
+
+# RX200 Reacher RealROS Environment - Goal Conditioned
+register(
+    id='RX200ReacherGoalReal-v0',
+    entry_point='rl_environments.rx200.real.task_envs.reach.rx200_reach_goal_real:RX200ReacherGoalEnv',
+    max_episode_steps=100,
+)
