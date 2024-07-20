@@ -166,18 +166,18 @@ class RX200RobotGoalEnv(RealGoalEnv.RealGoalEnv):
         self._check_connection_and_readiness()
 
         # For ROS Controllers
-        self.joint_names = ["waist",
-                            "shoulder",
-                            "elbow",
-                            "wrist_angle",
-                            "wrist_rotate"]
+        self.arm_joint_names = ["waist",
+                                "shoulder",
+                                "elbow",
+                                "wrist_angle",
+                                "wrist_rotate"]
 
         self.gripper_joint_names = ["left_finger",
                                     "right_finger"]
 
         # low-level control
         # The rostopic for joint trajectory controller
-        self.joint_trajectory_controller_pub = rospy.Publisher('/rx200/arm_controller/command',
+        self.arm_controller_pub = rospy.Publisher('/rx200/arm_controller/command',
                                                                JointTrajectory,
                                                                queue_size=10)
 
@@ -309,30 +309,29 @@ class RX200RobotGoalEnv(RealGoalEnv.RealGoalEnv):
 
             # get the current joint efforts - not using this
             self.current_joint_efforts = list(joint_state.effort)
-
-    def move_joints(self, q_positions: np.ndarray, time_from_start: float = 0.5) -> bool:
+    def move_arm_joints(self, q_positions: np.ndarray, time_from_start: float = 0.5) -> bool:
         """
         Set a joint position target only for the arm joints using low-level ros controllers.
 
         Args:
-            q_positions: joint positions
-            time_from_start: time from start for the trajectory (set the speed to complete the trajectory within this time)
+            q_positions: joint positions of the robot arm
+            time_from_start: time from start of the trajectory (set the speed to complete the trajectory)
 
         Returns:
-            True if the trajectory is set
+            True if the action is successful
         """
 
         # create a JointTrajectory object
         trajectory = JointTrajectory()
-        trajectory.joint_names = self.joint_names
+        trajectory.joint_names = self.arm_joint_names
         trajectory.points.append(JointTrajectoryPoint())
         trajectory.points[0].positions = q_positions
-        trajectory.points[0].velocities = [0.0] * len(self.joint_names)
-        trajectory.points[0].accelerations = [0.0] * len(self.joint_names)
+        trajectory.points[0].velocities = [0.0] * len(self.arm_joint_names)
+        trajectory.points[0].accelerations = [0.0] * len(self.arm_joint_names)
         trajectory.points[0].time_from_start = rospy.Duration(time_from_start)
 
         # send the trajectory to the controller
-        self.joint_trajectory_controller_pub.publish(trajectory)
+        self.arm_controller_pub.publish(trajectory)
 
         return True
 
@@ -366,19 +365,13 @@ class RX200RobotGoalEnv(RealGoalEnv.RealGoalEnv):
         """
         Set a joint position target only for the arm joints.
         """
-        if self.async_moveit:
-            return self.move_RX200_object.set_trajectory_joints(q_positions, async_move=True)
-        else:
-            return self.move_RX200_object.set_trajectory_joints(q_positions)
+        return self.move_RX200_object.set_trajectory_joints(q_positions, async_move=True)
 
     def set_trajectory_ee(self, pos: np.ndarray) -> bool:
         """
         Set a pose target for the end effector of the robot arm.
         """
-        if self.async_moveit:
-            return self.move_RX200_object.set_trajectory_ee(position=pos, async_move=True)
-        else:
-            return self.move_RX200_object.set_trajectory_ee(position=pos)
+        return self.move_RX200_object.set_trajectory_ee(position=pos, async_move=True)
 
     def get_ee_pose(self):
         """
