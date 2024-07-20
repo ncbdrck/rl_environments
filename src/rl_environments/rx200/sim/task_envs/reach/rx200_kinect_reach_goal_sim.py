@@ -590,7 +590,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         Function to apply an action to the robot.
 
         Args:
-            action: Joint positions (numpy array)
+            action: Joint positions (numpy array) or EE position (numpy array)
         """
         # save the action for observation
         self.prev_action = action.copy()
