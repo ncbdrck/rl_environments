@@ -29,7 +29,7 @@ register(
 
 """
 This is the v1 of the RX200 Reacher Task Environment.
-- Check if any of the joints are going beyond the workspace
+- updated the action fn to get ee pos and joint values for delta actions
 """
 
 
@@ -482,7 +482,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
         self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
                                 ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # for IK calculation - EE actions
-        self.joint_values = self.get_joint_angles()
+        self.joint_values = self.get_joint_angles().copy()
 
         # for dense reward calculation
         self.action_not_in_limits = False
@@ -668,6 +668,10 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         # --- EE action
         if self.ee_action_type:
 
+            # --- Get the current EE position
+            ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
+            self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+
             # --- Make actions as deltas
             if self.delta_action:
                 # we can use smoothing using the action_cycle_time or delta_coeff
@@ -734,6 +738,9 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
             # --- Make actions as deltas
             if self.delta_action:
+
+                # get the current joint values
+                self.joint_values = self.get_joint_angles().copy()
 
                 # we can use smoothing using the action_cycle_time or delta_coeff
                 if self.use_smoothing:
@@ -832,7 +839,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         # --- Get Current Joint values - only for the joints we are using
         #  we need this for delta actions
         # self.joint_values = self.current_joint_positions.copy()  # Get a float list
-        self.joint_values = self.get_joint_angles()  # Get a float list
+        self.joint_values = self.get_joint_angles().copy()  # Get a float list
         # we don't need to convert this to numpy array since we concat using numpy below
 
         if self.prev_action is None:
