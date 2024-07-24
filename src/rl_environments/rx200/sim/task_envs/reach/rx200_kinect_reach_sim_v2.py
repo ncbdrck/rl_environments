@@ -21,15 +21,15 @@ from multiros.utils import ros_controllers
 from multiros.utils import ros_markers
 
 # Register your environment using the gymnasium register method to utilize gym.make("TaskEnv-v0").
-register(
-    id='RX200ReacherSim-v1',
-    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim_v1:RX200ReacherEnv',
-    max_episode_steps=1000,
-)
+# register(
+#     id='RX200ReacherSim-v2',
+#     entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim_v2:RX200ReacherEnv',
+#     max_episode_steps=1000,
+# )
 
 """
-This is the v1 of the RX200 Reacher Task Environment.
-- updated the action fn to get ee pos and joint values for delta actions
+This is the v2 of the RX200 Reacher Task Environment.
+- updated the smoothing algo for the actions
 """
 
 
@@ -67,6 +67,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         * action_speed: set the speed to complete the trajectory. default in 0.5 seconds
         * simple_dense_reward: Whether to use a simple dense reward or not.
         * log_internal_state: Whether to log the internal state of the environment or not.
+        * extra_smoothing: Whether to use extra smoothing for actions or not.
 
     """
 
@@ -77,7 +78,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
                  load_table: bool = True, debug: bool = False, action_speed: float = 0.5,
-                 simple_dense_reward: bool = True, log_internal_state: bool = False):
+                 simple_dense_reward: bool = True, log_internal_state: bool = False, extra_smoothing: bool = False):
 
         """
         variables to keep track of ros, gazebo ports and gazebo pid
@@ -182,6 +183,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         Use smoothing for actions
         """
         self.use_smoothing = use_smoothing
+        self.extra_smoothing = extra_smoothing
         self.action_cycle_time = action_cycle_time
 
         """
@@ -255,10 +257,10 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         06. Joint velocities - 8
 
         total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
-        
+
         # depth image
         480x640 32FC1
-        
+
         # rgb image
         480x640X3 RGB images
         """
@@ -371,7 +373,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         Define subscribers/publishers and Markers as needed.
         """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
-                                                 lifetime=30.0)
+                                                 lifetime=20.0)
 
         """
         Init super class.
@@ -381,7 +383,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                          load_table=load_table)
 
         # for smoothing
-        if self.use_smoothing:
+        if self.extra_smoothing:
             if self.ee_action_type:
                 self.action_vector = np.zeros(3, dtype=np.float32)
             else:
@@ -443,7 +445,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         self.current_action = None
 
         # for smoothing
-        if self.use_smoothing:
+        if self.extra_smoothing:
             if self.ee_action_type:
                 self.action_vector = np.zeros(3, dtype=np.float32)
             else:
@@ -481,7 +483,8 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
         self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
         self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # for IK calculation - EE actions
+                                ee_pos_tmp.pose.orientation.z,
+                                ee_pos_tmp.pose.orientation.w])  # for IK calculation - EE actions
         self.joint_values = self.get_joint_angles()
 
         # for dense reward calculation
@@ -675,7 +678,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             # --- Make actions as deltas
             if self.delta_action:
                 # we can use smoothing using the action_cycle_time or delta_coeff
-                if self.use_smoothing:
+                if self.extra_smoothing:
                     if self.action_cycle_time == 0.0:
                         # first derivative of the action
                         self.action_vector = self.action_vector + (self.delta_coeff * action)
@@ -715,9 +718,14 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                 IK_found, joint_positions = self.calculate_ik(target_pos=action, ee_ori=self.ee_ori)
 
                 if IK_found:
-                    # execute the trajectory - EE
-                    self.movement_result = self.move_arm_joints(q_positions=joint_positions,
-                                                                time_from_start=self.action_speed)
+                    # we can use simple smoothing or direct trajectory execution
+                    if self.use_smoothing:
+                        self.movement_result = self.smooth_trajectory(joint_positions, self.action_speed)
+                    else:
+                        # execute the trajectory - EE
+                        self.movement_result = self.move_arm_joints(q_positions=joint_positions,
+                                                                    time_from_start=self.action_speed)
+                    # for dense reward calculation
                     self.within_goal_space = True
 
                 else:
@@ -743,7 +751,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                 self.joint_values = self.get_joint_angles()
 
                 # we can use smoothing using the action_cycle_time or delta_coeff
-                if self.use_smoothing:
+                if self.extra_smoothing:
                     if self.action_cycle_time == 0.0:
                         # first derivative of the action
                         self.action_vector = self.action_vector + (self.delta_coeff * action)
@@ -786,8 +794,15 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
             # check if the action is within the workspace
             if self.check_action_within_workspace(action):
-                # execute the trajectory - ros_controllers
-                self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
+
+                # we can use simple smoothing or direct trajectory execution
+                if self.use_smoothing:
+                    self.movement_result = self.smooth_trajectory(action, self.action_speed)
+                else:
+                    # execute the trajectory - ros_controllers
+                    self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
+
+                # for dense reward calculation
                 self.within_goal_space = True
 
             else:
@@ -946,7 +961,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
                     # done (green) goal_marker
                     self.goal_marker.set_color(r=0.0, g=1.0)
-                    self.goal_marker.set_duration(duration=5)
+                    self.goal_marker.set_duration(duration=30)
 
                 else:
                     # not done (red) goal_marker

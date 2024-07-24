@@ -20,6 +20,13 @@ register(
     max_episode_steps=100,
 )
 
+# RX200 Reacher Multiros Default Environment
+register(
+    id='RX200ReacherSim-v2',
+    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim_v2:RX200ReacherEnv',
+    max_episode_steps=100,
+)
+
 # RX200 Reacher Multiros Default Environment - ee action space
 register(
     id='RX200ReacherEESim-v0',
