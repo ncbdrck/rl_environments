@@ -215,6 +215,8 @@ class RX200RobotGoalEnv(RealGoalEnv.RealGoalEnv):
         * joint_state_callback: Get the joint state of the robot
         * move_arm_joints: Set a joint position target only for the arm joints using low-level ros controllers.
         * move_gripper_joints: Set a joint position target only for the gripper joints using low-level ros controllers.
+        * smooth_trajectory: Smooth the trajectory by interpolating between the current and target positions.
+        * publish_trajectory: Publish the entire trajectory at once.
         * set_trajectory_joints: Set a joint position target only for the arm joints.
         * set_trajectory_ee: Set a pose target for the end effector of the robot arm.
         * get_ee_pose: Get end-effector pose a geometry_msgs/PoseStamped message
@@ -360,6 +362,49 @@ class RX200RobotGoalEnv(RealGoalEnv.RealGoalEnv):
         self.gripper_controller_pub.publish(trajectory)
 
         return True
+
+    def smooth_trajectory(self, q_positions, time_from_start, multiplier=100):
+        """
+        Smooth the trajectory by interpolating between the current and target positions.
+
+        Args:
+            q_positions: target joint positions
+            time_from_start: time from start of the trajectory (set the speed to complete the trajectory)
+            multiplier: number of steps to interpolate between the current and target positions
+        """
+        num_steps = int(time_from_start * multiplier)  # Adjust the multiplier for more or fewer steps
+        current_positions = self.joint_values
+        delta_positions = (q_positions - current_positions) / num_steps
+
+        trajectory_points = []
+        for step in range(1, num_steps + 1):
+            intermediate_positions = current_positions + step * delta_positions
+            trajectory_points.append((intermediate_positions, time_from_start / num_steps * step))
+
+        self.publish_trajectory(trajectory_points)
+
+        return True
+
+    def publish_trajectory(self, trajectory_points):
+        """
+        Publish the entire trajectory at once.
+
+        Args:
+            trajectory_points: List of tuples containing joint positions and time_from_start
+        """
+        trajectory = JointTrajectory()
+        trajectory.joint_names = self.arm_joint_names
+
+        for positions, time_from_start in trajectory_points:
+            point = JointTrajectoryPoint()
+            point.positions = positions
+            point.velocities = [0.0] * len(self.arm_joint_names)
+            point.accelerations = [0.0] * len(self.arm_joint_names)
+            point.time_from_start = rospy.Duration(time_from_start)
+            trajectory.points.append(point)
+
+        # send the trajectory to the controller
+        self.arm_controller_pub.publish(trajectory)
 
     def set_trajectory_joints(self, q_positions: np.ndarray) -> bool:
         """
