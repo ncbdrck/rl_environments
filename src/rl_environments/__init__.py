@@ -1,5 +1,75 @@
 from gymnasium.envs.registration import register
 
+ALL_REACH_SIM_NAMES = [
+    'RX200ReacherSim-v0',  # RX200 Reacher Multiros Default Environment - v0
+    'RX200ReacherSim-v1',  # RX200 Reacher Multiros Default Environment - v1
+    'RX200ReacherSim-v2',  # RX200 Reacher Multiros Default Environment - v2
+    'RX200ReacherEESim-v0',  # RX200 Reacher Multiros Default Environment - ee action space
+    'RX200kinectReacherSimRGB-v0',  # RX200 Reacher Multiros Default Environment with RGB Observation - using kinect v2
+    'RX200kinectReacherEESimRGB-v0',
+    # RX200 Reacher Multiros Default Environment with RGB Observation - using kinect v2 - ee action space
+    'RX200kinectReacherSimRGBPlus-v0',
+    # RX200 Reacher Multiros Default Environment with RGB and Normal Observation - using kinect v2
+    'RX200kinectReacherEESimRGBPlus-v0',
+    # RX200 Reacher Multiros Default Environment with RGB and Normal Observation - using kinect v2 - ee action space
+    'RX200kinectReacherSimRGBDepthPlus-v0',
+    # RX200 Reacher Multiros Default Environment with RGB, Depth and Normal Observation - using kinect v2
+    'RX200kinectReacherEESimRGBDepthPlus-v0',
+    # RX200 Reacher Multiros Default Environment with RGB, Depth and Normal Observation - using kinect v2 - ee action space
+    'RX200ReacherGoalSim-v0',  # RX200 Reacher Multiros Goal Environment
+    'RX200ReacherEEGoalSim-v0',  # RX200 Reacher Multiros Goal Environment - ee action space
+    'RX200kinectReacherGoalSimRGB-v0',  # RX200 Reacher Multiros Goal Environment with RGB Observation - using kinect v2
+    'RX200kinectReacherEEGoalSimRGB-v0',
+    # RX200 Reacher Multiros Goal Environment with RGB Observation - using kinect v2 - ee action space
+    'RX200kinectReacherGoalSimRGBPlus-v0',
+    # RX200 Reacher Multiros Goal Environment with RGB and Normal Observation - using kinect v2
+    'RX200kinectReacherEEGoalSimRGBPlus-v0',
+    # RX200 Reacher Multiros Goal Environment with RGB and Normal Observation - using kinect v2 - ee action space
+    'RX200kinectReacherGoalSimRGBDepthPlus-v0',
+    # RX200 Reacher Multiros Goal Environment with RGB, Depth and Normal Observation - using kinect v2
+    'RX200kinectReacherEEGoalSimRGBDepthPlus-v0',
+    # RX200 Reacher Multiros Goal Environment with RGB, Depth and Normal Observation - using kinect v2 - ee action space
+    'RX200Zed2ReacherSimRGB-v0',  # RX200 Reacher Multiros Default Environment with RGB Observation - using ZED2
+    'RX200Zed2ReacherEESimRGB-v0',
+    # RX200 Reacher Multiros Default Environment with RGB Observation - using ZED2 - ee action space
+    'RX200Zed2ReacherSimRGBPlus-v0',
+    # RX200 Reacher Multiros default Environment with RGB and Normal Observation - using ZED2
+    'RX200Zed2ReacherEESimRGBPlus-v0',
+    # RX200 Reacher Multiros default Environment with RGB and Normal Observation - using ZED2 - ee action space
+    'RX200Zed2ReacherSimRGBDepthPlus-v0',
+    # RX200 Reacher Multiros default Environment with RGB, Depth and Normal Observation - using ZED2
+    'RX200Zed2ReacherEESimRGBDepthPlus-v0',
+    # RX200 Reacher Multiros default Environment with RGB, Depth and Normal Observation - using ZED2 - ee action space
+    'RX200Zed2ReacherGoalSimRGB-v0',  # RX200 Reacher Multiros Goal Environment with RGB Observation - using ZED2
+    'RX200Zed2ReacherEEGoalSimRGB-v0',
+    # RX200 Reacher Multiros Goal Environment with RGB Observation - using ZED2 - ee action space
+    'RX200Zed2ReacherGoalSimRGBPlus-v0',
+    # RX200 Reacher Multiros Goal Environment with RGB and Normal Observation - using ZED2
+    'RX200Zed2ReacherEEGoalSimRGBPlus-v0',
+    # RX200 Reacher Multiros Goal Environment with RGB and Normal Observation - using ZED2 - ee action space
+    'RX200Zed2ReacherGoalSimRGBDepthPlus-v0',
+    # RX200 Reacher Multiros Goal Environment with RGB, Depth and Normal Observation - using ZED2
+    'RX200Zed2ReacherEEGoalSimRGBDepthPlus-v0',
+    # RX200 Reacher Multiros Goal Environment with RGB, Depth and Normal Observation - using ZED2 - ee action space
+]
+
+ALL_PUSH_SIM_NAMES = [
+    'RX200PushSim-v0',  # RX200 Push Multiros Default Environment
+    'RX200PushSim-v1',  # RX200 Push Multiros Default Environment - v1
+    'RX200PushEESim-v0',  # RX200 Push Multiros Default Environment - ee action space
+    'RX200kinectPushSimRGB-v0',  # RX200 Push Multiros Default Environment with RGB Observation - using kinect v2
+    'RX200kinectPushEESimRGB-v0',
+    # RX200 Push Multiros Default Environment with RGB Observation - using kinect v2 - ee action space
+    'RX200kinectPushSimRGBPlus-v0',
+    # RX200 Push Multiros default Environment with RGB and Normal Observation - using kinect v2
+    'RX200kinectPushEESimRGBPlus-v0',
+    # RX200 Push Multiros default Environment with RGB and Normal Observation - using kinect v2 - ee action space
+    'RX200kinectPushSimRGBDepthPlus-v0',
+    # RX200 Push Multiros default Environment with RGB, Depth and Normal Observation - using kinect v2
+    'RX200kinectPushEESimRGBDepthPlus-v0',
+    # RX200 Push Multiros default Environment with RGB, Depth and Normal Observation - using kinect v2 - ee action space
+]
+
 # ---------------------------- Simulation Environments  ----------------------------
 
 # ============================ RX200 Reacher Multiros Environments ============================
@@ -51,7 +121,6 @@ register(
     kwargs={'rgb_obs_only': True, 'normal_obs_only': False, 'ee_action_type': True}
 )
 
-
 # RX200 Reacher Multiros default Environment with RGB and Normal Observation - using kinect v2
 register(
     id='RX200kinectReacherSimRGBPlus-v0',
@@ -83,9 +152,6 @@ register(
     max_episode_steps=100,
     kwargs={'rgb_plus_depth_plus_normal_obs': True, 'normal_obs_only': False, 'ee_action_type': True}
 )
-
-
-
 
 # ************************** RX200 Reacher Multiros Goal Environments - Kinect **************************
 
@@ -152,10 +218,6 @@ register(
     kwargs={'rgb_plus_depth_plus_normal_obs': True, 'normal_obs_only': False, 'ee_action_type': True}
 )
 
-
-
-
-
 # ************************** RX200 Reacher Multiros Default Environments - ZED2 **************************
 
 # RX200 Reacher Multiros Default Environment with RGB Observation - using ZED2
@@ -206,10 +268,6 @@ register(
     kwargs={'rgb_plus_depth_plus_normal_obs': True, 'normal_obs_only': False, 'ee_action_type': True}
 )
 
-
-
-
-
 # ************************** RX200 Reacher Multiros Goal Environments - ZED2 **************************
 
 # RX200 Reacher Multiros Goal Environment with RGB Observation - using ZED2
@@ -259,11 +317,6 @@ register(
     max_episode_steps=100,
     kwargs={'rgb_plus_depth_plus_normal_obs': True, 'normal_obs_only': False, 'ee_action_type': True}
 )
-
-
-
-
-
 
 # ============================ RX200 Push Multiros Environments ============================
 # ************************** RX200 Push Multiros Default Environments - Kinect **************************
@@ -336,7 +389,6 @@ register(
     max_episode_steps=100,
     kwargs={'rgb_plus_depth_plus_normal_obs': True, 'normal_obs_only': False, 'ee_action_type': True}
 )
-
 
 # ---------------------------- Real Environments  ----------------------------
 # ============================ RX200 Reacher RealROS Environments ============================
