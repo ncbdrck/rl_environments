@@ -21,7 +21,7 @@ Options:
   -h              Display this help message and quit.
 
   -p PATH         Sets the absolute install location for the ROS workspace. If not specified,
-                  the workspace directory will default to 'rl_ws'.
+                  the workspace directory will default to 'catkin_ws'.
 
   -n              Install all packages and dependencies without prompting. This is useful if
                   you're running this script in a non-interactive terminal.
@@ -32,7 +32,7 @@ Examples:
     This will display this help message and quit.
 
   ./install_rl_env.sh
-    This will install the RL environment with the workspace directory defaulting to 'rl_ws'.
+    This will install the RL environment with the workspace directory defaulting to 'catkin_ws'.
     It will prompt you to ask if you want to install certain packages and dependencies.
 
   ./install_rl_env.sh -p /path/to/workspace -n
@@ -163,11 +163,11 @@ shift "$((OPTIND -1))"
 
 if [ -z "$WORKSPACE_PATH" ]; then
   if [ "$NONINTERACTIVE" = true ]; then
-    WORKSPACE_PATH="rl_ws"
+    WORKSPACE_PATH="catkin_ws"
   else
-    WORKSPACE_PATH=$(prompt_user "Please enter the ROS workspace path (default is 'rl_ws'): ")
+    WORKSPACE_PATH=$(prompt_user "Please enter the ROS workspace path (default is 'catkin_ws'): ")
     if [ -z "$WORKSPACE_PATH" ]; then
-      WORKSPACE_PATH="rl_ws"
+      WORKSPACE_PATH="catkin_ws"
     fi
   fi
 fi
