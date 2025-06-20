@@ -5,7 +5,7 @@ This repository contains sim and real prebuild environments (`Gymnasium-based`) 
 Robots
 - Trossen Robotics ReactorX-200 - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/rx200.html)
 - [Niryo Ned 2](https://niryo.com/product/educational-desktop-robotic-arm/) - [Documentation](https://docs.niryo.com/robots/ned2/) - [ROS Documentation](https://niryorobotics.github.io/ned_ros/)
-- [Universal Robots UR5](https://www.universal-robots.com/products/ur5-robot/) - [Documentation](https://www.universal-robots.com/products/ur5-robot/ur5-technical-specifications/) - [ROS Documentation](http://wiki.ros.org/universal_robot/Tutorials/Getting%20Started%20with%20a%20Universal%20Robot%20and%20ROS-Industrial) - [ROS Driver](https://github.com/UniversalRobots/Universal_Robots_ROS_Driver)
+- [Universal Robots UR5](https://www.universal-robots.com/products/ur5-robot/) - [ROS Documentation](http://wiki.ros.org/universal_robot/Tutorials/Getting%20Started%20with%20a%20Universal%20Robot%20and%20ROS-Industrial) - [ROS Driver](https://github.com/UniversalRobots/Universal_Robots_ROS_Driver)
 
 # Prerequisites
 
