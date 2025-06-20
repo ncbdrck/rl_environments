@@ -144,7 +144,7 @@ Follow these steps to install this package:
     ```shell
    cd ~/catkin_ws/
    rosdep install --from-paths src --ignore-src -r -y
-   catkin build
+   catkin_make
    source devel/setup.bash
    rospack profile
     ```
