@@ -130,7 +130,14 @@ Follow these steps to install this package:
     git clone https://github.com/ncbdrck/rl_environments.git
     ```
 
-2. This package relies on several Python packages. You can install them by running the following command:
+2. Clone supporting packages:
+    ```shell
+    cd ~/catkin_ws/src
+    git clone https://github.com/ncbdrck/reactorx200_description.git
+    git clone https://github.com/ncbdrck/common-sensors.git
+    ```
+
+3. This package relies on several Python packages. You can install them by running the following command:
 
     ```shell
     # Install pip if you haven't already by running this command
@@ -140,7 +147,7 @@ Follow these steps to install this package:
     cd ~/catkin_ws/src/rl_environments/
     pip3 install -r requirements.txt
     ```
-3. Build the ROS packages and source the environment:
+4. Build the ROS packages and source the environment:
     ```shell
    cd ~/catkin_ws/
    rosdep install --from-paths src --ignore-src -r -y
