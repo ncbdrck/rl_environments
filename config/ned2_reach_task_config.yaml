@@ -1,53 +1,33 @@
 ned2: #namespace
 
-    # ******** Task Related parameters (we don't use these)
-    max_steps: 1000  # Maximum number of steps (not currently used)
-
     # ******** Action Space
     # Define the minimum and maximum joint values with the gripper open
     min_joint_pos:
-      - -3.12  # waist
-      - -1.88  # shoulder
-      - -1.88  # elbow
-      - -1.74  # wrist_angle
-      - -3.12  # wrist_rotate
+      - -2.949
+      - -2.09
+      - -1.34
+      - -2.089
+      - -1.919
+      - -2.53
 
     max_joint_pos:
-      - 3.12  # waist
-      - 1.97  # shoulder
-      - 1.62  # elbow
-      - 2.14  # wrist_angle
-      - 3.12  # wrist_rotate
-
-    # Define the minimum and maximum joint values for grasping (not used for the reach task)
-    min_joint_pos_grasp:
-      - -3.12  # waist
-      - -1.88  # shoulder
-      - -1.88  # elbow
-      - -1.74  # wrist_angle
-      - -3.12  # wrist_rotate
-      - 0.015  # left_finger
-      - -0.037  # right_finger
-
-    max_joint_pos_grasp:
-      - 3.12  # waist
-      - 1.97  # shoulder
-      - 1.62  # elbow
-      - 2.14  # wrist_angle
-      - 3.12  # wrist_rotate
-      - 0.037  # left_finger
-      - -0.015  # right_finger
+      - 2.949
+      - 0.61
+      - 1.57
+      - 2.089
+      - 1.922
+      - 2.53
 
     # ******** Observation Space
 
-    position_ee_max: # Maximum XYZ position for the end effector (EE) (reach is 55cm)
-      x: 0.55
-      y: 0.55
-      z: 0.55
+    position_ee_max: # Maximum XYZ position for the end effector (EE) (reach is 44cm)
+      x: 0.44
+      y: 0.44
+      z: 0.44
     position_ee_min: # Minimum XYZ position for the EE
-      x: -0.55
-      y: -0.55
-      z: -0.55  # Near zero to prevent going below the table
+      x: -0.44
+      y: -0.44
+      z: -0.0  # Near zero to prevent going below the table
 
     rpy_ee_max: # Maximum roll, pitch, and yaw (RPY) values for the EE
       r: 6.2832
@@ -70,44 +50,36 @@ ned2: #namespace
     max_distance: 1.00 # Maximum distance from EE to the desired GOAL EE (50cm + 50cm)
 
     min_joint_angles:
-      - -1.88  # elbow
-      - -6.28  # gripper
-      - 0.015  # left_finger
-      - -0.037  # right_finger
-      - -1.88  # shoulder
-      - -3.12  # waist
-      - -1.74  # wrist_angle
-      - -3.12  # wrist_rotate
+      - -2.949
+      - -2.09
+      - -1.34
+      - -2.089
+      - -1.919
+      - -2.53
 
     max_joint_angles:
-      - 1.62  # elbow
-      - 6.28  # gripper
-      - 0.037  # left_finger
-      - -0.015  # right_finger
-      - 1.97  # shoulder
-      - 3.12  # waist
-      - 2.14  # wrist_angle
-      - 3.12  # wrist_rotate
+      - 2.949
+      - 0.61
+      - 1.57
+      - 2.089
+      - 1.922
+      - 2.53
 
     min_joint_vel:
-      - 0.0  # elbow
-      - 0.0  # gripper
-      - 0.0  # left_finger
-      - 0.0  # right_finger
-      - 0.0  # shoulder
-      - 0.0  # waist
-      - 0.0  # wrist_angle
-      - 0.0  # wrist_rotate
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
 
     max_joint_vel:
-      - 3.14  # elbow
-      - 3.14  # gripper
-      - 1.00  # left_finger
-      - 1.00  # right_finger
-      - 1.00  # shoulder
-      - 3.14  # waist
-      - 3.14  # wrist_angle
-      - 3.14  # wrist_rotate
+      - 0.785
+      - 0.5235
+      - 0.785
+      - 1.57
+      - 1.57
+      - 1.775
 
     # ******** goal space
     position_goal_max: # Maximum XYZ position for the goal
