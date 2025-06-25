@@ -9,7 +9,7 @@ from gymnasium.envs.registration import register
 import scipy.spatial
 
 # Custom robot env
-from rl_environments.rx200.sim.robot_envs import rx200_robot_sim
+from rl_environments.ned2.sim.robot_envs import ned2_robot_sim
 
 # core modules of the framework
 from multiros.utils import gazebo_core
@@ -22,27 +22,22 @@ from multiros.utils import ros_markers
 
 # Register your environment using the gymnasium register method to utilize gym.make("TaskEnv-v0").
 # register(
-#     id='RX200ReacherSim-v2',
-#     entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim_v2:RX200ReacherEnv',
+#     id='NED2ReacherSim-v2',
+#     entry_point='rl_environments.ned2.sim.task_envs.reach.ned2_reach_sim:NED2ReacherEnv',
 #     max_episode_steps=1000,
 # )
 
-"""
-This is the v2 of the RX200 Reacher Task Environment.
-- updated the smoothing algo for the actions
-"""
 
-
-class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
+class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
     """
-    This Task env is for a simple Reach Task with the RX200 robot.
+    This Task env is for a simple Reach Task with the NED2 robot.
 
     The task is done if
         * The robot reached the goal
 
     Here
-        * Action Space - Continuous (5 actions for joints or 3 xyz position of the end effector)
-        * Observation - Continuous (28 obs or rgb/depth image or a combination)
+        * Action Space - Continuous (6 actions for joints or 3 xyz position of the end effector)
+        * Observation - Continuous (simp obs or rgb/depth image or a combination)
 
     Init Args:
         * launch_gazebo: Whether to launch Gazebo or not. If False, it is assumed that Gazebo is already running.
@@ -128,9 +123,9 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         # init the ros node
         if ros_port is not None:
-            self.node_name = "RX200ReacherEnvSim" + "_" + ros_port
+            self.node_name = "NED2ReacherEnvSim" + "_" + ros_port
         else:
-            self.node_name = "RX200ReacherEnvSim"
+            self.node_name = "NED2ReacherEnvSim"
 
         rospy.init_node(self.node_name, anonymous=True)
 
@@ -220,7 +215,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         """
 
         # add to ros parameter server
-        ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="rx200_reach_task_config.yaml", ns="/")
+        ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="ned2_reach_task_config.yaml", ns="/")
         self._get_params()
 
         """
@@ -252,11 +247,11 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5 or 3 (joint or ee)
-        06. Joint velocities - 8
+        04. Current Joint values - 6
+        05. Previous action - 6 or 3 (joint or ee)
+        06. Joint velocities - 6
 
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+        total: (3x2) + 1 + (6 or 3) + (6x2)
 
         # depth image
         480x640 32FC1
@@ -379,7 +374,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         Init super class.
         """
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-                         real_time=True, action_cycle_time=action_cycle_time, use_kinect=use_kinect,
+                         real_time=True, action_cycle_time=action_cycle_time, use_camera=use_kinect,
                          load_table=load_table)
 
         # for smoothing
@@ -387,7 +382,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             if self.ee_action_type:
                 self.action_vector = np.zeros(3, dtype=np.float32)
             else:
-                self.action_vector = np.zeros(5, dtype=np.float32)
+                self.action_vector = np.zeros(6, dtype=np.float32)
 
         # we can use this to set a time for ros_controllers to complete the action
         self.environment_loop_time = 1.0 / environment_loop_rate  # in seconds
@@ -438,7 +433,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             rospy.loginfo("Initialising the init params!")
 
         # Initial robot pose - Home
-        self.init_pos = np.array([0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+        self.init_pos = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
 
         # make the current action None to stop execution for real time envs and also stop the env loop
         self.init_done = False  # we don't need to execute the loop until we reset the env
@@ -449,13 +444,13 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             if self.ee_action_type:
                 self.action_vector = np.zeros(3, dtype=np.float32)
             else:
-                self.action_vector = np.zeros(5, dtype=np.float32)
+                self.action_vector = np.zeros(6, dtype=np.float32)
 
         # move the robot to the home pose
         # we need to wait for the movement to finish
         # we define the movement result here so that we can use it in the environment loop (we need it for dense reward)
-        self.move_RX200_object.stop_arm()
-        self.movement_result = self.move_RX200_object.set_trajectory_joints(self.init_pos)
+        self.move_NED2_object.stop_arm()
+        self.movement_result = self.move_NED2_object.set_trajectory_joints(self.init_pos)
         if not self.movement_result:
             if self.log_internal_state:
                 rospy.logwarn("Homing failed!")
@@ -652,7 +647,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                         rospy.loginfo(f"Executing action --->: {self.action_counter}")
                     self.action_counter += 1
             else:
-                self.move_RX200_object.stop_arm()  # stop the arm if there is no action
+                self.move_NED2_object.stop_arm()  # stop the arm if there is no action
 
     def execute_action(self, action):
         """
@@ -819,11 +814,11 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5 or 3 (joint or ee)
-        06. Joint velocities - 8
+        04. Current Joint values - 6
+        05. Previous action - 6 or 3 (joint or ee)
+        06. Joint velocities - 6
 
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+        total: (3x2) + 1 + (6 or 3) + (6x2)
 
         # depth image
         480x640 32FC1
@@ -1179,48 +1174,48 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         Function to get configuration parameters (optional)
         """
         # Action Space
-        self.min_joint_values = rospy.get_param('/rx200/min_joint_pos')
-        self.max_joint_values = rospy.get_param('/rx200/max_joint_pos')
+        self.min_joint_values = rospy.get_param('/ned2/min_joint_pos')
+        self.max_joint_values = rospy.get_param('/ned2/max_joint_pos')
 
         # Observation Space
-        self.position_ee_max = rospy.get_param('/rx200/position_ee_max')
-        self.position_ee_min = rospy.get_param('/rx200/position_ee_min')
-        self.rpy_ee_max = rospy.get_param('/rx200/rpy_ee_max')
-        self.rpy_ee_min = rospy.get_param('/rx200/rpy_ee_min')
-        self.linear_distance_max = rospy.get_param('/rx200/linear_distance_max')
-        self.linear_distance_min = rospy.get_param('/rx200/linear_distance_min')
-        self.max_distance = rospy.get_param('/rx200/max_distance')
-        self.min_joint_vel = rospy.get_param('/rx200/min_joint_vel')
-        self.max_joint_vel = rospy.get_param('/rx200/max_joint_vel')
-        self.min_joint_angles = rospy.get_param('/rx200/min_joint_angles')
-        self.max_joint_angles = rospy.get_param('/rx200/max_joint_angles')
+        self.position_ee_max = rospy.get_param('/ned2/position_ee_max')
+        self.position_ee_min = rospy.get_param('/ned2/position_ee_min')
+        self.rpy_ee_max = rospy.get_param('/ned2/rpy_ee_max')
+        self.rpy_ee_min = rospy.get_param('/ned2/rpy_ee_min')
+        self.linear_distance_max = rospy.get_param('/ned2/linear_distance_max')
+        self.linear_distance_min = rospy.get_param('/ned2/linear_distance_min')
+        self.max_distance = rospy.get_param('/ned2/max_distance')
+        self.min_joint_vel = rospy.get_param('/ned2/min_joint_vel')
+        self.max_joint_vel = rospy.get_param('/ned2/max_joint_vel')
+        self.min_joint_angles = rospy.get_param('/ned2/min_joint_angles')
+        self.max_joint_angles = rospy.get_param('/ned2/max_joint_angles')
 
         # Goal space
-        self.position_goal_max = rospy.get_param('/rx200/position_goal_max')
-        self.position_goal_min = rospy.get_param('/rx200/position_goal_min')
+        self.position_goal_max = rospy.get_param('/ned2/position_goal_max')
+        self.position_goal_min = rospy.get_param('/ned2/position_goal_min')
 
         # Achieved goal
-        self.position_achieved_goal_max = rospy.get_param('/rx200/position_achieved_goal_max')
-        self.position_achieved_goal_min = rospy.get_param('/rx200/position_achieved_goal_min')
+        self.position_achieved_goal_max = rospy.get_param('/ned2/position_achieved_goal_max')
+        self.position_achieved_goal_min = rospy.get_param('/ned2/position_achieved_goal_min')
 
         # Desired goal
-        self.position_desired_goal_max = rospy.get_param('/rx200/position_desired_goal_max')
-        self.position_desired_goal_min = rospy.get_param('/rx200/position_desired_goal_min')
+        self.position_desired_goal_max = rospy.get_param('/ned2/position_desired_goal_max')
+        self.position_desired_goal_min = rospy.get_param('/ned2/position_desired_goal_min')
 
         # Tolerances
-        self.reach_tolerance = rospy.get_param('/rx200/reach_tolerance')
+        self.reach_tolerance = rospy.get_param('/ned2/reach_tolerance')
 
         # Variables related to rewards
-        self.step_reward = rospy.get_param('/rx200/step_reward')
-        self.mult_dist_reward = rospy.get_param('/rx200/multiplier_dist_reward')
-        self.reached_goal_reward = rospy.get_param('/rx200/reached_goal_reward')
-        self.joint_limits_reward = rospy.get_param('/rx200/joint_limits_reward')
-        self.none_exe_reward = rospy.get_param('/rx200/none_exe_reward')
-        self.not_within_goal_space_reward = rospy.get_param('/rx200/not_within_goal_space_reward')
+        self.step_reward = rospy.get_param('/ned2/step_reward')
+        self.mult_dist_reward = rospy.get_param('/ned2/multiplier_dist_reward')
+        self.reached_goal_reward = rospy.get_param('/ned2/reached_goal_reward')
+        self.joint_limits_reward = rospy.get_param('/ned2/joint_limits_reward')
+        self.none_exe_reward = rospy.get_param('/ned2/none_exe_reward')
+        self.not_within_goal_space_reward = rospy.get_param('/ned2/not_within_goal_space_reward')
 
         # workspace
-        self.workspace_max = rospy.get_param('/rx200/workspace_max')
-        self.workspace_min = rospy.get_param('/rx200/workspace_min')
+        self.workspace_max = rospy.get_param('/ned2/workspace_max')
+        self.workspace_min = rospy.get_param('/ned2/workspace_min')
 
     # ------------------------------------------------------
     #   Task Methods for launching gazebo or roscore
