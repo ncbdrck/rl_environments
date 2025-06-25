@@ -9,6 +9,8 @@ from sensor_msgs.msg import JointState, PointCloud2, Image
 from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from niryo_robot_tools_commander.msg import ToolAction, ToolGoal, ToolCommand
+import actionlib
 
 from realros.envs import RealBaseEnv
 
@@ -32,22 +34,23 @@ This is not necessary, but we can see if this section
 works by calling "gymnasium.make" this env.
 but you need to
     1. init a node - rospy.init_node('test_MyRobotEnv')
-    2. gymnasium.make("RX200RobotBaseEnv-v0")
+    2. gymnasium.make("NED2RobotBaseEnv-v0")
 """
 register(
-    id='RX200RobotBaseEnv-v0',
-    entry_point='rl_environments.rx200.real.robot_envs.rx200_robot_real:RX200RobotEnv',
+    id='NED2RobotBaseEnv-v0',
+    entry_point='rl_environments.ned2.real.robot_envs.ned2_robot_real:NED2RobotEnv',
     max_episode_steps=1000,
 )
 
 
-class RX200RobotEnv(RealBaseEnv.RealBaseEnv):
+class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
     """
-    Superclass for all real RX200 Robot environments.
+    Superclass for all real NED2 Robot environments.
     """
 
-    def __init__(self, ros_port: str = None, seed: int = None, close_env_prompt: bool = False, action_cycle_time=0.0,
-                 use_kinect: bool = False, use_zed2: bool = False):
+    def __init__(self, ros_port:str = None, seed: int = None, close_env_prompt: bool = False, action_cycle_time=0.0,
+                 use_kinect: bool = False, use_zed2: bool = False,
+                 remote_ip: str = None, local_ip:str = None, multi_device_mode: bool = True):
         """
         Initializes a new Robot Environment
 
@@ -61,15 +64,19 @@ class RX200RobotEnv(RealBaseEnv.RealBaseEnv):
 
         Actuators Topic List:
             MoveIt!: Send the joint positions to the robot.
-            /rx200/arm_controller/command: Send the joint positions to the robot.
-            /rx200/gripper_controller/command: Send the joint positions to the robot
+            /niryo_robot_follow_joint_trajectory_controller/command: Send the joint positions to the robot.
+            /niryo_robot_tools_commander/action_server: Send the joint positions to the robot gripper.
         """
-        rospy.loginfo("Start Init RX200RobotEnv RealROS")
+        rospy.loginfo("Start Init  NED2RobotEnv RealROS")
 
         """
         Change the ros/gazebo master
         """
-        if ros_port is not None:
+        if multi_device_mode:
+            ros_common.change_ros_master_multi_device(remote_ip=remote_ip,
+                                                      local_ip=local_ip, remote_ros_port=ros_port)
+
+        elif ros_port is not None:
             ros_common.change_ros_master(ros_port=ros_port)
 
         """
@@ -81,16 +88,7 @@ class RX200RobotEnv(RealBaseEnv.RealBaseEnv):
         Launch a roslaunch file that will setup the connection with the real robot 
         """
 
-        load_robot = True
-        robot_pkg_name = "interbotix_xsarm_moveit_interface"
-        robot_launch_file = "xsarm_moveit_interface.launch"
-        robot_args = ["robot_model:=rx200", "use_actual:=true", "dof:=5", "use_python_interface:=true",
-                      "use_moveit_rviz:=true"]
-
-        """
-        namespace of the robot
-        """
-        namespace = "/rx200"
+        load_robot = False
 
         """
         kill rosmaster at the end of the env
@@ -106,27 +104,23 @@ class RX200RobotEnv(RealBaseEnv.RealBaseEnv):
         Init GazeboBaseEnv.
         """
         super().__init__(
-            load_robot=load_robot, robot_pkg_name=robot_pkg_name, robot_launch_file=robot_launch_file,
-            robot_args=robot_args, namespace=namespace, kill_rosmaster=kill_rosmaster, clean_logs=clean_logs,
-            ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt, action_cycle_time=action_cycle_time)
+            load_robot=load_robot, kill_rosmaster=kill_rosmaster, clean_logs=clean_logs,
+            ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt, action_cycle_time=action_cycle_time,
+            multi_device_mode=multi_device_mode, remote_ip=remote_ip, local_ip=local_ip)
 
         """
         initialise controller and sensor objects here
         """
         # ---------- joint state
-        if namespace is not None and namespace != '/':
-            self.joint_state_topic = namespace + "/joint_states"
-        else:
-            self.joint_state_topic = "/joint_states"
+        self.joint_state_topic = "/joint_states"
 
         self.joint_state_sub = rospy.Subscriber(self.joint_state_topic, JointState, self.joint_state_callback)
         self.joint_state = JointState()
 
         # Moveit object
-        self.move_RX200_object = MoveitRealROS(arm_name='interbotix_arm',
-                                               gripper_name='interbotix_gripper',
-                                               robot_description="rx200/robot_description",
-                                               ns="rx200")
+        self.move_NED2_object = MoveitRealROS(arm_name='arm',
+                                               robot_description="/robot_description",
+                                               ns="/")
 
         # ---------- kinect or zed2
         self.use_kinect = use_kinect
@@ -149,13 +143,13 @@ class RX200RobotEnv(RealBaseEnv.RealBaseEnv):
         # todo: find the actual topic names
         if self.use_zed2:
             # depth image subscriber
-            self.zed2_depth_sub = rospy.Subscriber("/rx200/zed2/depth/depth_registered", Image,
+            self.zed2_depth_sub = rospy.Subscriber("/zed2/depth/depth_registered", Image,
                                                         self.zed2_depth_callback)
             self.zed2_depth = Image()
             self.cv_image_depth = None
 
             # rgb image subscriber
-            self.zed2_rgb_sub = rospy.Subscriber("/rx200/zed2/left/image_rect_color", Image,
+            self.zed2_rgb_sub = rospy.Subscriber("/zed2/left/image_rect_color", Image,
                                                    self.zed2_rgb_callback)
             self.zed2_rgb = Image()
             self.cv_image_rgb = None
@@ -167,43 +161,36 @@ class RX200RobotEnv(RealBaseEnv.RealBaseEnv):
         self._check_connection_and_readiness()
 
         # For ROS Controllers
-        self.arm_joint_names = ["waist",
-                                "shoulder",
-                                "elbow",
-                                "wrist_angle",
-                                "wrist_rotate"]
-
-        self.gripper_joint_names = ["left_finger",
-                                    "right_finger"]
+        self.arm_joint_names = ["joint_1",
+                                "joint_2",
+                                "joint_3",
+                                "joint_4",
+                                "joint_5",
+                                "joint_6"]
 
         # low-level control
         # The rostopic for joint trajectory controller
-        self.arm_controller_pub = rospy.Publisher('/rx200/arm_controller/command',
+        self.arm_controller_pub = rospy.Publisher('niryo_robot_follow_joint_trajectory_controller/command',
                                                                JointTrajectory,
                                                                queue_size=10)
 
-        # rostopic for gripper controller
-        self.gripper_controller_pub = rospy.Publisher('/rx200/gripper_controller/command',
-                                                      JointTrajectory,
-                                                      queue_size=10)
-
         # parameters for calculating FK
-        self.ee_link = "rx200/ee_gripper_link"
-        self.ref_frame = "rx200/base_link"
+        self.ee_link = "wrist_link"
+        self.ref_frame = "base_link"
 
         # Fk with pykdl_utils
-        self.pykdl_robot = URDF.from_parameter_server(key='rx200/robot_description')
+        self.pykdl_robot = URDF.from_parameter_server(key='/robot_description')
         self.kdl_kin = KDLKinematics(urdf=self.pykdl_robot, base_link=self.ref_frame, end_link=self.ee_link)
 
         # with ros_kinematics
-        self.ros_kin = ros_kinematics.Kinematics_pyrobot(robot_description_parm="rx200/robot_description",
+        self.ros_kin = ros_kinematics.Kinematics_pyrobot(robot_description_parm="/robot_description",
                                                          base_link=self.ref_frame,
                                                          end_link=self.ee_link)
 
         """
         Finished __init__ method
         """
-        rospy.loginfo("End Init RX200RobotEnv")
+        rospy.loginfo("End Init NED2RobotEnv")
 
     # ---------------------------------------------------
     #   Custom methods for the Robot Environment
@@ -339,29 +326,33 @@ class RX200RobotEnv(RealBaseEnv.RealBaseEnv):
 
         return True
 
-    def move_gripper_joints(self, q_positions: np.ndarray, time_from_start: float = 0.5) -> bool:
+    def move_gripper_joints(self, action: str) -> bool:
         """
-        Set a joint position target only for the gripper joints using low-level ros controllers.
+        Set a joint position target only for the gripper joints using low-level ros controllers. - ros action server
 
         Args:
-            q_positions: joint positions of the gripper
-            time_from_start: time from start of the trajectory (set the speed to complete the trajectory)
+            action: "open" or "close" the gripper
 
         Returns:
             True if the action is successful
         """
 
-        # create a JointTrajectory object
-        trajectory = JointTrajectory()
-        trajectory.joint_names = self.gripper_joint_names
-        trajectory.points.append(JointTrajectoryPoint())
-        trajectory.points[0].positions = q_positions
-        trajectory.points[0].velocities = [0.0] * len(self.gripper_joint_names)
-        trajectory.points[0].accelerations = [0.0] * len(self.gripper_joint_names)
-        trajectory.points[0].time_from_start = rospy.Duration(time_from_start)
+        # for the gripper
+        gripper_action_client = actionlib.SimpleActionClient('/niryo_robot_tools_commander/action_server',
+                                                                  ToolAction)
 
-        # send the trajectory to the controller
-        self.gripper_controller_pub.publish(trajectory)
+        # wait for the action server to start
+        gripper_action_client.wait_for_server()
+
+        # create a ToolGoal object
+        tool_goal = ToolGoal()
+        tool_goal.cmd.tool_id = 11  # gripper tool id (normal gripper)
+        tool_goal.cmd.cmd_type = ToolCommand.OPEN_GRIPPER if action == "open" else ToolCommand.CLOSE_GRIPPER
+
+        # send the goal to the action server
+        gripper_action_client.send_goal(tool_goal)
+        # wait for the action to complete
+        gripper_action_client.wait_for_result()
 
         return True
 
@@ -412,47 +403,45 @@ class RX200RobotEnv(RealBaseEnv.RealBaseEnv):
         """
         Set a joint position target only for the arm joints.
         """
-        return self.move_RX200_object.set_trajectory_joints(q_positions, async_move=True)
+        return self.move_NED2_object.set_trajectory_joints(q_positions, async_move=True)
 
     def set_trajectory_ee(self, pos: np.ndarray) -> bool:
         """
         Set a pose target for the end effector of the robot arm.
         """
-        return self.move_RX200_object.set_trajectory_ee(position=pos, async_move=True)
+        return self.move_NED2_object.set_trajectory_ee(position=pos, async_move=True)
 
     def get_ee_pose(self):
         """
         Returns the end-effector pose as a geometry_msgs/PoseStamped message
 
-        This gives us the best pose if we are using the moveit config of the ReactorX repo
-        They are getting the pose with ee_gripper_link
         """
-        return self.move_RX200_object.get_robot_pose()
+        return self.move_NED2_object.get_robot_pose()
 
     def get_ee_rpy(self):
         """
         Returns the end-effector orientation as a list of roll, pitch, and yaw angles.
         """
-        return self.move_RX200_object.get_robot_rpy()
+        return self.move_NED2_object.get_robot_rpy()
 
     def get_joint_angles(self):
         """
         get current joint angles of the robot arm - 5 elements
         Returns a list
         """
-        return self.move_RX200_object.get_joint_angles_robot_arm()
+        return self.move_NED2_object.get_joint_angles_robot_arm()
 
     def check_goal(self, goal):
         """
         Check if the goal is reachable
         """
-        return self.move_RX200_object.check_goal(goal)
+        return self.move_NED2_object.check_goal(goal)
 
     def check_goal_reachable_joint_pos(self, joint_pos):
         """
         Check if the goal is reachable with joint positions
         """
-        return self.move_RX200_object.check_goal_joint_pos(joint_pos)
+        return self.move_NED2_object.check_goal_joint_pos(joint_pos)
 
     def kinect_depth_callback(self, data):
         """
@@ -528,9 +517,9 @@ class RX200RobotEnv(RealBaseEnv.RealBaseEnv):
         """
         Function to check if moveit services are running
         """
-        rospy.wait_for_service("/rx200/move_group/trajectory_execution/set_parameters")
-        rospy.logdebug(rostopic.get_topic_type("/rx200/planning_scene", blocking=True))
-        rospy.logdebug(rostopic.get_topic_type("/rx200/move_group/status", blocking=True))
+        rospy.wait_for_service("/move_group/trajectory_execution/set_parameters")
+        rospy.logdebug(rostopic.get_topic_type("/planning_scene", blocking=True))
+        rospy.logdebug(rostopic.get_topic_type("/move_group/status", blocking=True))
 
         return True
 
@@ -539,8 +528,7 @@ class RX200RobotEnv(RealBaseEnv.RealBaseEnv):
         """
         Function to check if ros controllers are running
         """
-        rospy.logdebug(rostopic.get_topic_type("/rx200/arm_controller/state", blocking=True))
-        rospy.logdebug(rostopic.get_topic_type("/rx200/gripper_controller/state", blocking=True))
+        rospy.logdebug(rostopic.get_topic_type("/niryo_robot_follow_joint_trajectory_controller/state", blocking=True))
 
         return True
 
@@ -556,7 +544,7 @@ class RX200RobotEnv(RealBaseEnv.RealBaseEnv):
         """
         Function to check if zed2 sensor is running
         """
-        rospy.logdebug(rostopic.get_topic_type("/rx200/zed2/left/image_rect_color", blocking=True))
+        rospy.logdebug(rostopic.get_topic_type("/zed2/left/image_rect_color", blocking=True))
 
         return True
 

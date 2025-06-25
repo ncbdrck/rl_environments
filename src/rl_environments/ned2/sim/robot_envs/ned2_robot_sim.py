@@ -12,6 +12,8 @@ from sensor_msgs.msg import JointState, PointCloud2, Image
 from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from niryo_robot_tools_commander.msg import ToolAction, ToolGoal, ToolCommand
+import actionlib
 
 from cv_bridge import CvBridge
 import cv2
@@ -37,23 +39,23 @@ works by calling "gymnasium.make" this env.
 but you need to
     1. run gazebo - gazebo_core.launch_gazebo(launch_roscore=False, paused=False, pub_clock_frequency=100, gui=True)
     2. init a node - rospy.init_node('test_MyRobotGoalEnv')
-    3. gymnasium.make("RX200RobotEnv-v0")
+    3. gymnasium.make("NED2RobotEnv-v0")
 """
 register(
-    id='RX200RobotEnv-v0',
-    entry_point='rl_environments.rx200.sim.robot_envs.rx200_robot_sim:RX200RobotEnv',
+    id='NED2RobotEnv-v0',
+    entry_point='rl_environments.ned2.sim.robot_envs.ned2_robot_sim:NED2RobotEnv',
     max_episode_steps=1000,
 )
 
 
-class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
+class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
     """
-    Superclass for all RX200 Robot environments.
+    Superclass for all NED2 Robot environments - gazebo-based.
     """
 
     def __init__(self, ros_port: str = None, gazebo_port: str = None, gazebo_pid=None, seed: int = None,
                  real_time: bool = False, action_cycle_time=0.0, load_cube: bool = False, load_table: bool = False,
-                 use_kinect: bool = False):
+                 use_camera: bool = False, gripper: bool = False):
         """
         Initializes a new Robot Environment
 
@@ -62,15 +64,14 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         Sensor Topic List:
             MoveIt: To get the pose and rpy of the robot.
             /joint_states: JointState received for the joints of the robot
-            /head_mount_kinect2/depth/image_raw: Depth image from the kinect sensor
-            /head_mount_kinect2/rgb/image_raw: RGB image from the kinect sensor
+            /gazebo_camera/image_raw: RGB image from the robot camera.
 
         Actuators Topic List:
             MoveIt: Send the joint positions to the robot.
-            /rx200/arm_controller/command: Send the joint positions to the robot.
-            /rx200/gripper_controller/command: Send the joint positions to the robot.
+            /ned2/niryo_robot_follow_joint_trajectory_controller/command: Send the joint positions to the robot.
+            /ned2/niryo_robot_tools_commander/action_server: Action server to control the robot tools.
         """
-        rospy.loginfo("Start Init RX200RobotEnv Multiros")
+        rospy.loginfo("Start Init NED2RobotEnv Multiros")
 
         """
         Change the ros/gazebo master
@@ -81,6 +82,7 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         """
         parameters
         """
+        self.gripper = gripper
         self.real_time = real_time  # if True, the simulation will run in real time
 
         # we don't need to pause/unpause gazebo if we are running in real time
@@ -101,21 +103,21 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         spawn_robot = True
 
         # location of the robot URDF file
-        urdf_pkg_name = "reactorx200_description"
-        urdf_file_name = "rx200_kinect.urdf.xacro"
-        urdf_folder = "/urdf"
+        urdf_pkg_name = "niryo_robot_description"
+        urdf_file_name = "niryo_ned2_gazebo.urdf.xacro" if not gripper else "niryo_ned2_gripper1_n_camera.urdf"
+        urdf_folder = "/urdf/ned2"
 
         # extra urdf args
         urdf_xacro_args = None
 
         # namespace of the robot
-        namespace = "/rx200"
+        namespace = "ned2"
 
         # robot state publisher
         robot_state_publisher_max_freq = None
         new_robot_state_term = False
 
-        robot_model_name = "rx200"
+        robot_model_name = "ned2"
         robot_ref_frame = "world"
 
         # Set the initial pose of the robot model
@@ -128,8 +130,10 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         robot_ori_z = 0.0
 
         # controller (must be inside above pkg_name/config/)
-        controllers_file = "reactorx200_controller.yaml"
-        controllers_list = ["joint_state_controller", "arm_controller", "gripper_controller"]
+        controller_package_name = "rl_environments"
+        controllers_file = "ned2_ros_controllers.yaml"
+        controllers_list = ["joint_state_controller", "niryo_robot_follow_joint_trajectory_controller"] if not gripper else \
+            ["joint_state_controller", "niryo_robot_follow_joint_trajectory_controller", "gazebo_tool_commander"]
 
         """
         Spawn other objects in Gazebo
@@ -138,6 +142,7 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         self.load_table = load_table
 
         if load_table:
+            # we can use the model from reactorx200_description package
             gazebo_models.spawn_sdf_model_gazebo(pkg_name="reactorx200_description", file_name="model.sdf",
                                                  model_folder="/models/table",
                                                  model_name="table", namespace=namespace,
@@ -193,11 +198,11 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         gazebo_max_update_rate = None
         gazebo_timestep = None
 
-        if rospy.has_param('/rx200/update_rate_multiplier'):
-            gazebo_max_update_rate = rospy.get_param('/rx200/gazebo_update_rate_multiplier')
+        if rospy.has_param('/ned2/update_rate_multiplier'):
+            gazebo_max_update_rate = rospy.get_param('/ned2/gazebo_update_rate_multiplier')
 
-        if rospy.has_param('/rx200/time_step'):
-            gazebo_timestep = rospy.get_param('/rx200/time_step')
+        if rospy.has_param('/ned2/time_step'):
+            gazebo_timestep = rospy.get_param('/ned2/time_step')
 
         """
         kill rosmaster at the end of the env
@@ -229,7 +234,8 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
             num_gazebo_steps=num_gazebo_steps, gazebo_max_update_rate=gazebo_max_update_rate,
             gazebo_timestep=gazebo_timestep, kill_rosmaster=kill_rosmaster, kill_gazebo=kill_gazebo,
             clean_logs=clean_logs, ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-            unpause_pause_physics=unpause_pause_physics, action_cycle_time=action_cycle_time)
+            unpause_pause_physics=unpause_pause_physics, action_cycle_time=action_cycle_time,
+            controller_package_name=controller_package_name)
 
         """
         Define ros publisher, subscribers and services for robot and sensors
@@ -244,15 +250,24 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         self.joint_state = JointState()
 
         # ---------- Moveit
-        ros_common.ros_launch_launcher(pkg_name="interbotix_xsarm_moveit_interface",
-                                       launch_file_name="xsarm_moveit_interface.launch",
-                                       args=["robot_model:=rx200", "dof:=5", "use_python_interface:=true",
-                                             "use_moveit_rviz:=false"])
+        if not gripper:
+            ros_common.ros_launch_launcher(pkg_name="niryo_moveit_config_standalone",
+                                           launch_file_name="move_group.launch",
+                                           args=["hardware_version:=ned2", "simulation_mode:=true",
+                                                 "load_robot_description:=false"
+                                                 ])
+        else:
+            ros_common.ros_launch_launcher(pkg_name="niryo_moveit_config_w_gripper1",
+                                           launch_file_name="move_group.launch",
+                                           args=["hardware_version:=ned2", "simulation_mode:=true",
+                                                 "load_robot_description:=false"
+                                                 ])
 
         # ---------- kinect
-        self.use_kinect = use_kinect
+        self.use_camera = use_camera
 
-        if self.use_kinect:
+        # todo: check the camera topics
+        if self.use_camera:
             # depth image subscriber
             self.kinect_depth_sub = rospy.Subscriber("/head_mount_kinect2/depth/image_raw", Image,
                                                      self.kinect_depth_callback)
@@ -275,48 +290,42 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         """
         initialise controller and sensor objects here
         """
-        self.arm_joint_names = ["waist",
-                                "shoulder",
-                                "elbow",
-                                "wrist_angle",
-                                "wrist_rotate"]
+        self.arm_joint_names = ["joint_1",
+                                "joint_2",
+                                "joint_3",
+                                "joint_4",
+                                "joint_5",
+                                "joint_6"]
 
-        self.gripper_joint_names = ["left_finger",
-                                    "right_finger"]
+        self.gripper_joint_names = ["joint_base_to_mors_1",
+                                    "joint_base_to_mors_2"]
 
         if self.real_time:
             # we don't need to pause/unpause gazebo if we are running in real time
-            self.move_RX200_object = MoveitMultiros(arm_name='interbotix_arm',
-                                                    gripper_name='interbotix_gripper',
-                                                    robot_description="rx200/robot_description",
-                                                    ns="rx200", pause_gazebo=False)
+            self.move_NED2_object = MoveitMultiros(arm_name='arm',
+                                                    robot_description="ned2/robot_description",
+                                                    ns="ned2", pause_gazebo=False)
         else:
-            self.move_RX200_object = MoveitMultiros(arm_name='interbotix_arm',
-                                                    gripper_name='interbotix_gripper',
-                                                    robot_description="rx200/robot_description",
-                                                    ns="rx200")
+            self.move_NED2_object = MoveitMultiros(arm_name='arm',
+                                                    robot_description="ned2/robot_description",
+                                                    ns="ned2")
 
         # low-level control
         # rostopic for arm trajectory controller
-        self.arm_controller_pub = rospy.Publisher('/rx200/arm_controller/command',
-                                                  JointTrajectory,
-                                                  queue_size=10)
-
-        # rostopic for gripper controller
-        self.gripper_controller_pub = rospy.Publisher('/rx200/gripper_controller/command',
+        self.arm_controller_pub = rospy.Publisher('/ned2/niryo_robot_follow_joint_trajectory_controller/command',
                                                       JointTrajectory,
                                                       queue_size=10)
 
         # parameters for calculating FK, IK
-        self.ee_link = "rx200/ee_gripper_link"
-        self.ref_frame = "rx200/base_link"
+        self.ee_link = "ned2/wrist_link"
+        self.ref_frame = "ned2/base_link"
 
         # Fk with pykdl_utils - old method
-        self.pykdl_robot = URDF.from_parameter_server(key='rx200/robot_description')
+        self.pykdl_robot = URDF.from_parameter_server(key='ned2/robot_description')
         self.kdl_kin = KDLKinematics(urdf=self.pykdl_robot, base_link=self.ref_frame, end_link=self.ee_link)
 
         # with ros_kinematics
-        self.ros_kin = ros_kinematics.Kinematics_pyrobot(robot_description_parm="rx200/robot_description",
+        self.ros_kin = ros_kinematics.Kinematics_pyrobot(robot_description_parm="ned2/robot_description",
                                                          base_link=self.ref_frame,
                                                          end_link=self.ee_link)
 
@@ -327,7 +336,7 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
             gazebo_core.pause_gazebo()
         else:
             gazebo_core.unpause_gazebo()  # this is because loading models will pause the simulation
-        rospy.loginfo("End Init RX200RobotEnv")
+        rospy.loginfo("End Init NED2RobotEnv")
 
     # ---------------------------------------------------
     #   Custom methods for the Custom Robot Environment
@@ -375,7 +384,7 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         # pose is a geometry_msgs/Pose Message
         header, pose, twist, success = gazebo_models.gazebo_get_model_state(model_name=model_name,
-                                                                            relative_entity_name="rx200/base_link")
+                                                                            relative_entity_name="ned2/base_link")
 
         if not self.real_time:
             gazebo_core.pause_gazebo()
@@ -551,29 +560,33 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         return True
 
-    def move_gripper_joints(self, q_positions: np.ndarray, time_from_start: float = 0.5) -> bool:
+    def move_gripper_joints(self, action: str) -> bool:
         """
-        Set a joint position target only for the gripper joints using low-level ros controllers.
+        Set a joint position target only for the gripper joints using low-level ros controllers. - ros action server
 
         Args:
-            q_positions: joint positions of the gripper
-            time_from_start: time from start of the trajectory (set the speed to complete the trajectory)
+            action: "open" or "close" the gripper
 
         Returns:
             True if the action is successful
         """
 
-        # create a JointTrajectory object
-        trajectory = JointTrajectory()
-        trajectory.joint_names = self.gripper_joint_names
-        trajectory.points.append(JointTrajectoryPoint())
-        trajectory.points[0].positions = q_positions
-        trajectory.points[0].velocities = [0.0] * len(self.gripper_joint_names)
-        trajectory.points[0].accelerations = [0.0] * len(self.gripper_joint_names)
-        trajectory.points[0].time_from_start = rospy.Duration(time_from_start)
+        # for the gripper
+        gripper_action_client = actionlib.SimpleActionClient('/ned2/niryo_robot_tools_commander/action_server',
+                                                                  ToolAction)
 
-        # send the trajectory to the controller
-        self.gripper_controller_pub.publish(trajectory)
+        # wait for the action server to start
+        gripper_action_client.wait_for_server()
+
+        # create a ToolGoal object
+        tool_goal = ToolGoal()
+        tool_goal.cmd.tool_id = 11  # gripper tool id (normal gripper)
+        tool_goal.cmd.cmd_type = ToolCommand.OPEN_GRIPPER if action == "open" else ToolCommand.CLOSE_GRIPPER
+
+        # send the goal to the action server
+        gripper_action_client.send_goal(tool_goal)
+        # wait for the action to complete
+        gripper_action_client.wait_for_result()
 
         return True
 
@@ -627,9 +640,9 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         if self.real_time:
             # do not wait for the action to finish
-            return self.move_RX200_object.set_trajectory_joints(q_positions, async_move=True)
+            return self.move_NED2_object.set_trajectory_joints(q_positions, async_move=True)
         else:
-            return self.move_RX200_object.set_trajectory_joints(q_positions)
+            return self.move_NED2_object.set_trajectory_joints(q_positions)
 
     def set_trajectory_ee(self, pos: np.ndarray) -> bool:
         """
@@ -637,9 +650,9 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         """
         if self.real_time:
             # do not wait for the action to finish
-            return self.move_RX200_object.set_trajectory_ee(position=pos, async_move=True)
+            return self.move_NED2_object.set_trajectory_ee(position=pos, async_move=True)
         else:
-            return self.move_RX200_object.set_trajectory_ee(position=pos)
+            return self.move_NED2_object.set_trajectory_ee(position=pos)
 
     def get_ee_pose(self):
         """
@@ -648,32 +661,32 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         This gives us the best pose if we are using the moveit config of the ReactorX repo
         They are getting the pose with ee_gripper_link
         """
-        return self.move_RX200_object.get_robot_pose()
+        return self.move_NED2_object.get_robot_pose()
 
     def get_ee_rpy(self):
         """
         Returns the end-effector orientation as a list of roll, pitch, and yaw angles.
         """
-        return self.move_RX200_object.get_robot_rpy()
+        return self.move_NED2_object.get_robot_rpy()
 
     def get_joint_angles(self):
         """
         get current joint angles of the robot arm - 5 elements
         Returns a list
         """
-        return self.move_RX200_object.get_joint_angles_robot_arm()
+        return self.move_NED2_object.get_joint_angles_robot_arm()
 
     def check_goal(self, goal):
         """
         Check if the goal is reachable
         """
-        return self.move_RX200_object.check_goal(goal)
+        return self.move_NED2_object.check_goal(goal)
 
     def check_goal_reachable_joint_pos(self, joint_pos):
         """
         Check if the goal is reachable with joint positions
         """
-        return self.move_RX200_object.check_goal_joint_pos(joint_pos)
+        return self.move_NED2_object.check_goal_joint_pos(joint_pos)
 
     def kinect_depth_callback(self, data):
         """
@@ -723,9 +736,9 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         """
         Function to check if moveit services are running
         """
-        rospy.wait_for_service("/rx200/move_group/trajectory_execution/set_parameters")
-        rospy.logdebug(rostopic.get_topic_type("/rx200/planning_scene", blocking=True))
-        rospy.logdebug(rostopic.get_topic_type("/rx200/move_group/status", blocking=True))
+        rospy.wait_for_service("/ned2/move_group/trajectory_execution/set_parameters")
+        rospy.logdebug(rostopic.get_topic_type("/ned2/planning_scene", blocking=True))
+        rospy.logdebug(rostopic.get_topic_type("/ned2/move_group/status", blocking=True))
 
         return True
 
@@ -734,12 +747,11 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         """
         Function to check if ros controllers are running
         """
-        rospy.logdebug(rostopic.get_topic_type("/rx200/arm_controller/state", blocking=True))
-        rospy.logdebug(rostopic.get_topic_type("/rx200/gripper_controller/state", blocking=True))
+        rospy.logdebug(rostopic.get_topic_type("/ned2/niryo_robot_follow_joint_trajectory_controller/state", blocking=True))
 
         return True
 
-    def _check_kinect_ready(self):
+    def _check_camera_ready(self):
         """
         Function to check if kinect sensor is running
         """
@@ -756,8 +768,8 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         self._check_joint_states_ready()
         self._check_ros_controllers_ready()
 
-        if self.use_kinect:
-            self._check_kinect_ready()
+        if self.use_camera:
+            self._check_camera_ready()
 
         rospy.loginfo("All system are ready!")
 
