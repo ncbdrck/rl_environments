@@ -49,6 +49,7 @@ ned2: #namespace
 
     max_distance: 1.00 # Maximum distance from EE to the desired GOAL EE (50cm + 50cm)
 
+    # No gripper in this task, otherwise we would have 8 values for the gripper
     min_joint_angles:
       - -2.949
       - -2.09
@@ -57,6 +58,7 @@ ned2: #namespace
       - -1.919
       - -2.53
 
+    # No gripper in this task, otherwise we would have 8 values for the gripper
     max_joint_angles:
       - 2.949
       - 0.61
@@ -65,6 +67,7 @@ ned2: #namespace
       - 1.922
       - 2.53
 
+    # No gripper in this task, otherwise we would have 8 values for the gripper
     min_joint_vel:
       - 0.0
       - 0.0
@@ -73,6 +76,7 @@ ned2: #namespace
       - 0.0
       - 0.0
 
+    # No gripper in this task, otherwise we would have 8 values for the gripper
     max_joint_vel:
       - 0.785
       - 0.5235
