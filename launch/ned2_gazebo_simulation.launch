@@ -1,39 +1,41 @@
-<?xml version="1.0" ?>
-<!-- This launch file allows to run simulation on Gazebo
-Warning : Some errors are present in Gazebo
--> It will log some errors because it cannot unload joint_controller (It's because ROS does it before Gazebo)
--> Gazebo GUI is kinda bad on closing. It will always run into SIGTERM. So, what you should do is
-to change _TIMEOUT_SIGINT value in the file /opt/ros/noetic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
-This will reduce the amount of time spent waiting during program shutdown
--->
-<launch xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:noNamespaceSchemaLocation="https://gist.githubusercontent.com/nalt/dfa2abc9d2e3ae4feb82ca5608090387/raw/roslaunch.xsd">
-    <env name="ROSCONSOLE_CONFIG_FILE"
-        value="$(find niryo_robot_bringup)/config/desktop_gazebo_simulation_trace.conf" />
-    <!-- Arguments definition -->
-    <arg name="log_level" default="INFO" />
-    <arg name="hardware_version" default="ned2" />
-    <arg name="debug" default="false"/>
-    <arg name="gripper_n_camera" default="true"/>
-    <arg name="simu_conveyor" default="true"/>
-    <arg name="gui" default="true"/>
-    <arg name="conf_location" default="version.txt"/>
-    <arg name="gazebo" default="false"/>
+<launch>
+  <arg name="paused" default="false"/>
+  <arg name="gui" default="true"/>
+  <arg name="hardware_version" default="ned2"/>
 
-    <!-- Define most of ROS parameters -->
-    <include file="$(find niryo_robot_bringup)/launch/niryo_$(arg hardware_version)_simulation.launch">
-        <arg name="simu_gripper" value="$(arg gripper_n_camera)"/>
-        <arg name="simu_conveyor" value="$(arg simu_conveyor)"/>
-        <arg name="log_level" value="$(arg log_level)" />
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gazebo" value="$(arg gazebo)"/>
-    </include>
+  <!-- Start Gazebo world -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="paused" value="$(arg paused)" />
+    <arg name="gui" value="$(arg gui)" />
+    <arg name="world_name" value="$(find gazebo_ros)/worlds/empty.world" />
+  </include>
 
-    <!-- Launching Gazebo World -->
-<!--     <include file="$(find niryo_robot_gazebo)/launch/niryo_robot_gazebo_world.launch.xml"> -->
-<!--         <arg name="gui" value="$(arg gui)"/> -->
-<!--     </include> -->
+  <!-- Load URDF (includes gazebo_ros_control plugin) -->
+  <param name="robot_description"
+         command="$(find xacro)/xacro '$(find niryo_robot_description)/urdf/ned2/niryo_ned2_gazebo.urdf.xacro'" />
 
-    <param name="/niryo_robot_vision/initialized" type="bool" value="true" unless="$(arg gripper_n_camera)"/>
+  <!-- Spawn robot in Gazebo -->
+  <node name="spawn_ned2" pkg="gazebo_ros" type="spawn_model" output="screen"
+        args="-urdf -param robot_description -model ned2 -z 0.78" />
 
+  <!-- Publish joint states and TFs -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
+
+  <!-- Load controllers (uses Niryo's controller name expected by MoveIt) -->
+  <rosparam file="$(find niryo_moveit_config_standalone)/config/ned2/ros_controllers.yaml" command="load"/>
+
+  <!-- Spawn joint state + Niryo's FollowJointTrajectory controller -->
+  <node name="controller_spawner" pkg="controller_manager" type="spawner"
+        args="joint_state_controller niryo_robot_follow_joint_trajectory_controller" output="screen"/>
+
+  <!-- Launch MoveIt using Niryo's standalone Move Group -->
+  <include file="$(find niryo_moveit_config_standalone)/launch/move_group.launch">
+    <arg name="hardware_version" value="$(arg hardware_version)"/>
+    <arg name="simulation_mode" value="true"/>
+    <arg name="load_robot_description" value="false"/>  <!-- We already load it above -->
+  </include>
+
+  <!-- Optional: RViz -->
+  <!-- <node pkg="rviz" type="rviz" name="rviz" output="screen" -->
+        <!-- args="-d $(find niryo_moveit_config_standalone)/launch/moveit.rviz"/> -->
 </launch>
