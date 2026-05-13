@@ -29,7 +29,7 @@ from multiros.utils import ros_kinematics
 
 from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
-from tf.transformations import euler_from_matrix
+from tf.transformations import euler_from_matrix, euler_from_quaternion
 
 """
 Although it is best to register only the task environment, one can also register the robot environment. 
@@ -393,9 +393,13 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         if success:
             if rpy:
-                orientation = euler_from_matrix([[pose.orientation.x, pose.orientation.y, pose.orientation.z],
-                                                 [pose.orientation.y, pose.orientation.w, pose.orientation.z],
-                                                 [pose.orientation.z, pose.orientation.y, pose.orientation.w]])
+                # The previous implementation passed an arbitrary 3x3 grid of
+                # quaternion components to euler_from_matrix, which is NOT a
+                # rotation matrix; the returned angles were meaningless.
+                # Use the proper quaternion -> euler conversion instead.
+                orientation = euler_from_quaternion(
+                    [pose.orientation.x, pose.orientation.y,
+                     pose.orientation.z, pose.orientation.w])
 
                 orientation = np.array(orientation, dtype=np.float32)
             else:

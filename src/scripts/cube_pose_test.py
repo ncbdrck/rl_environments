@@ -12,7 +12,7 @@ import rospy
 import numpy as np
 from cv_bridge import CvBridge
 from sensor_msgs.msg import PointCloud2, Image, CameraInfo
-from tf.transformations import euler_from_matrix
+from tf.transformations import euler_from_matrix, euler_from_quaternion
 
 # core modules of the multiros framework
 from multiros.utils import gazebo_core
@@ -80,9 +80,13 @@ class CubePoseTest:
 
         if success:
             if rpy:
-                orientation = euler_from_matrix([[pose.orientation.x, pose.orientation.y, pose.orientation.z],
-                                                 [pose.orientation.y, pose.orientation.w, pose.orientation.z],
-                                                 [pose.orientation.z, pose.orientation.y, pose.orientation.w]])
+                # The previous implementation passed an arbitrary 3x3 grid of
+                # quaternion components to euler_from_matrix, which is NOT a
+                # rotation matrix; the returned angles were meaningless.
+                # Use the proper quaternion -> euler conversion instead.
+                orientation = euler_from_quaternion(
+                    [pose.orientation.x, pose.orientation.y,
+                     pose.orientation.z, pose.orientation.w])
 
                 orientation = np.array(orientation, dtype=np.float32)
             else:
