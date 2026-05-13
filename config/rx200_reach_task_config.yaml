@@ -154,8 +154,13 @@ rx200: #namespace
 
 
     # ******** Gazebo Simulation parameters
-    gazebo_time_step: 0.001
-    gazebo_update_rate_multiplier: 50.0 # If training, multiply the max update rate by this number
+    gazebo_time_step: 0.001  # matches Gazebo's default
+    # Real-time factor for Gazebo physics. Keep at 1.0: the framework's
+    # production envs run with real_time=True (no pause/unpause), and
+    # the env loop is driven by rospy.Timer at a wall-clock rate. Anything
+    # above 1.0 lets physics outpace the agent's wall-clock-paced control
+    # loop, which breaks behaviour.
+    gazebo_update_rate_multiplier: 1.0
 
 
     # ******** Tolerance for the position of the goal
