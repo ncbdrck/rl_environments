@@ -124,7 +124,7 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         robot_pos_x = 0.0
         robot_pos_y = 0.0
         robot_pos_z = 0.0 if not load_table else 0.78
-        robot_ori_w = 0.0
+        robot_ori_w = 1.0
         robot_ori_x = 0.0
         robot_ori_y = 0.0
         robot_ori_z = 0.0
