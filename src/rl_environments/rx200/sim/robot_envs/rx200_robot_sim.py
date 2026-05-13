@@ -193,11 +193,13 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         gazebo_max_update_rate = None
         gazebo_timestep = None
 
-        if rospy.has_param('/rx200/update_rate_multiplier'):
+        if rospy.has_param('/rx200/gazebo_update_rate_multiplier'):
             gazebo_max_update_rate = rospy.get_param('/rx200/gazebo_update_rate_multiplier')
+            rospy.loginfo(f"Applied Gazebo update_rate_multiplier = {gazebo_max_update_rate}")
 
-        if rospy.has_param('/rx200/time_step'):
-            gazebo_timestep = rospy.get_param('/rx200/time_step')
+        if rospy.has_param('/rx200/gazebo_time_step'):
+            gazebo_timestep = rospy.get_param('/rx200/gazebo_time_step')
+            rospy.loginfo(f"Applied Gazebo time_step = {gazebo_timestep}")
 
         """
         kill rosmaster at the end of the env
