@@ -235,7 +235,22 @@ if __name__ == '__main__':
 
 ```
 
-For another example of using the environment with [ROS-Based Stable Baselines3](https://github.com/ncbdrck/sb3_ros_support), you can refer to the [rl_training_validation repository](https://github.com/ncbdrck/rl_training_validation)
+For another example of using the environment with [ROS-Based Stable Baselines3](https://github.com/ncbdrck/sb3_ros_support), you can refer to the [rl_training_validation repository](https://github.com/ncbdrck/rl_training_validation).
+
+The environments produced here are **standard gymnasium environments**. Any gymnasium-compatible RL library (Stable Baselines3, CleanRL, Tianshou, RLlib, or a custom training loop) works; `sb3_ros_support` is one convenience option, not a requirement.
+
+## Documentation
+
+Full ecosystem documentation lives under
+[`UniROS/docs/`](https://github.com/ncbdrck/UniROS/tree/main/docs)
+and covers:
+
+- The ready-made environment matrix (which robots and tasks are
+  currently implemented).
+- Creating new sim and real environments from the templates.
+- Training with any gymnasium-compatible RL library.
+- The joint sim+real training pattern (one policy, two domains).
+- API reference for every package in the ecosystem.
 
 ## Contact
 
