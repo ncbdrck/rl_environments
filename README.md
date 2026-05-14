@@ -1,5 +1,9 @@
 # RL Environments Based on UniROS
 
+[![Documentation Status](https://readthedocs.org/projects/uniros/badge/?version=latest)](https://uniros.readthedocs.io/en/latest/?badge=latest)
+
+📚 **Full documentation**: [uniros.readthedocs.io](https://uniros.readthedocs.io/) (ecosystem-wide docs hosted via UniROS)
+
 This repository contains sim and real prebuild environments (`Gymnasium-based`) created using [RealROS](https://github.com/ncbdrck/realros) and [MultiROS](https://github.com/ncbdrck/multiros) frameworks. 
 
 Robots
