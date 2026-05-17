@@ -631,6 +631,20 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         #  we don't need to execute the loop until we reset the env
         if self.init_done:
 
+            # Close-race guard: the rospy.Timer that drives this loop
+            # keeps firing during env.close() while MoveIt cleanup runs
+            # its 1s wait_for_message timeouts (×N). joint_states stops
+            # publishing once controllers are unspawned, so get_joint_angles
+            # can start returning an empty list, and the delta-action
+            # broadcast in execute_action crashes (Thread-N ValueError:
+            # shapes (0,) (5,) noticed during shutdown of v2). Bail out
+            # cleanly if ROS is shutting down or joint state is stale.
+            if rospy.is_shutdown():
+                return
+            jv = getattr(self, "joint_values", None)
+            if jv is None or len(jv) < 5:
+                return
+
             if self.debug:
                 if self.log_internal_state:
                     rospy.loginfo(f"Starting RL loop --->: {self.loop_counter}")
