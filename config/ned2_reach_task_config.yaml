@@ -27,7 +27,10 @@ ned2: #namespace
     position_ee_min: # Minimum XYZ position for the EE
       x: -0.44
       y: -0.44
-      z: -0.0  # Near zero to prevent going below the table
+      z: -0.0  # Loose obs bound (allows tiny negative z from transient sim
+               # states without tripping gymnasium's obs-not-in-space check).
+               # The actual ground/table floor is enforced by workspace_min.z
+               # + the per-link FK safety check on Ned2RobotEnv.
 
     rpy_ee_max: # Maximum roll, pitch, and yaw (RPY) values for the EE
       r: 6.2832
@@ -107,8 +110,9 @@ ned2: #namespace
 
 
     # ******** achieved_goal and desired_goal
-
-    # In this task this is the EE pose
+    # For Reach, achieved_goal IS the EE pose, so z_min matches
+    # workspace_min.z (0.10). An achieved goal at z<0.10 would be
+    # unreachable under the safety contract.
     position_achieved_goal_max: # Maximum XYZ position for the achieved_goal
       x: 0.55
       y: 0.55
@@ -116,9 +120,9 @@ ned2: #namespace
     position_achieved_goal_min: # Minimum XYZ position for the achieved_goal
       x: -0.55
       y: -0.55
-      z: 0.05  # Near zero to prevent going below the table
+      z: 0.10
 
-    # In this task, this is the same as goal
+    # In this task, this is the same as goal-sampling range.
     position_desired_goal_max: # Maximum XYZ position for the desired_goal
       x: 0.40
       y: 0.40
@@ -126,7 +130,7 @@ ned2: #namespace
     position_desired_goal_min: # Minimum XYZ position for the desired_goal
       x: 0.15
       y: -0.40
-      z: 0.05
+      z: 0.10
 
 
     # ******** Gazebo Simulation parameters
@@ -150,4 +154,19 @@ ned2: #namespace
     joint_limits_reward: -2.0
     none_exe_reward: -5.0
     not_within_goal_space_reward: -2.0
+
+
+    # ******** Safety (consumed by Ned2RobotEnv per-link FK check)
+    # Same defaults as rx200_reach_task_config.yaml; see that file for the
+    # full rationale on each value. Ned2 mounts at world z=0 (no desk
+    # spawned by the robot env), so table_z here represents the ground /
+    # workspace_1 pad. If/when Ned2 gets a desk mount, lift this value
+    # by the desk-top height.
+    table_z: -0.005
+    safety_z_margin: 0.015
+    safety_z_margin_real: 0.030
+    max_joint_delta: 0.5
+    max_joint_delta_real: 0.15
+    joint_state_timeout_s: 0.5
+    ee_pose_timeout_s: 0.5
 
