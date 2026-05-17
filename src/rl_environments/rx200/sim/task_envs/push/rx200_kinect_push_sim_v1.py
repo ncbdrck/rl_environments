@@ -701,6 +701,19 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         #  we don't need to execute the loop until we reset the env
         if self.init_done:
 
+            # Close-race guard (see reach v3 0712f5a for the diagnosis):
+            # rospy.Timer keeps firing during env.close() while MoveIt
+            # cleanup runs its 1s wait_for_message timeouts. Controllers
+            # get unspawned mid-close → joint_states stops → get_joint_angles
+            # returns []. Next tick's execute_action crashes on the
+            # delta-action broadcast (shape (0,) vs (5,)). Bail out cleanly
+            # if ROS is shutting down or joint state is stale.
+            if rospy.is_shutdown():
+                return
+            jv = getattr(self, "joint_values", None)
+            if jv is None or len(jv) < 5:
+                return
+
             if self.debug:
                 if self.log_internal_state:
                     rospy.loginfo(f"Starting RL loop --->: {self.loop_counter}")
@@ -788,10 +801,24 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
                 IK_found, joint_positions = self.calculate_ik(target_pos=action, ee_ori=self.ee_ori)
 
                 if IK_found:
-                    # execute the trajectory - EE
-                    self.movement_result = self.move_arm_joints(q_positions=joint_positions,
-                                                                time_from_start=self.action_speed)
-                    self.within_goal_space = True
+                    # Per-link FK safety (RX200RobotEnv._check_action_links_safe).
+                    # Workspace + IK-feasible doesn't mean every link stays
+                    # above the table — shoulder/elbow/wrist can dip below
+                    # while EE target sits above. See reach v3 (0a6dfb3) for
+                    # the full rationale.
+                    safe, reason = self._check_action_links_safe(
+                        joint_positions, current_joints=self.joint_values
+                    )
+                    if not safe:
+                        if self.log_internal_state:
+                            rospy.logwarn(f"[SAFETY] EE action rejected: {reason}")
+                        self.movement_result = False
+                        self.within_goal_space = False
+                    else:
+                        # execute the trajectory - EE
+                        self.movement_result = self.move_arm_joints(q_positions=joint_positions,
+                                                                    time_from_start=self.action_speed)
+                        self.within_goal_space = True
 
                 else:
                     if self.log_internal_state:
@@ -859,9 +886,20 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
 
             # check if the action is within the workspace
             if self.check_action_within_workspace(action):
-                # execute the trajectory - ros_controllers
-                self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
-                self.within_goal_space = True
+                # Per-link FK safety. self.joint_values was refreshed at the
+                # top of this delta-action block, so the delta cap can use it.
+                safe, reason = self._check_action_links_safe(
+                    action, current_joints=self.joint_values
+                )
+                if not safe:
+                    if self.log_internal_state:
+                        rospy.logwarn(f"[SAFETY] joint action rejected: {reason}")
+                    self.movement_result = False
+                    self.within_goal_space = False
+                else:
+                    # execute the trajectory - ros_controllers
+                    self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
+                    self.within_goal_space = True
 
             else:
                 if self.log_internal_state:
