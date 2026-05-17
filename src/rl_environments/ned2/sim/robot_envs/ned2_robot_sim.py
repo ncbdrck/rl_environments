@@ -336,13 +336,20 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         # PyKDL's ChainFkSolverPos_recursive expects len(q) to match the
         # *subchain* joint count, not the full arm DOF. Caching one
         # KDLKinematics per check-link lets us slice q[:n] correctly.
+        #
+        # Diagnostic logging: print BEFORE each KDLKinematics build so a
+        # hang in the pykdl C extension surfaces the offending link name
+        # in the log (try/except can't catch a C-level hang). Removed
+        # once the link list is verified working on each robot.
         self._safety_kin = {}
         for _link in self.SAFETY_CHECK_LINKS:
+            rospy.loginfo(f"[SAFETY] building kinematics for {_link} ...")
             try:
                 _kin = KDLKinematics(urdf=self.pykdl_robot,
                                      base_link=self.ref_frame,
                                      end_link=_link)
                 self._safety_kin[_link] = (_kin, int(_kin.num_joints))
+                rospy.loginfo(f"[SAFETY] {_link} ok ({_kin.num_joints} joints)")
             except Exception as _e:
                 rospy.logwarn(f"[SAFETY] kinematics setup failed for {_link}: {_e}")
 
