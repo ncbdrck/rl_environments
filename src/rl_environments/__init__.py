@@ -4,6 +4,7 @@ ALL_REACH_SIM_NAMES = [
     'RX200ReacherSim-v0',  # RX200 Reacher Multiros Default Environment - v0
     'RX200ReacherSim-v1',  # RX200 Reacher Multiros Default Environment - v1
     'RX200ReacherSim-v2',  # RX200 Reacher Multiros Default Environment - v2
+    'RX200ReacherSim-v3',  # RX200 Reacher Multiros Default Environment - v3 (adds per-link FK safety on RX200RobotEnv)
     'RX200ReacherEESim-v0',  # RX200 Reacher Multiros Default Environment - ee action space
     'RX200kinectReacherSimRGB-v0',  # RX200 Reacher Multiros Default Environment with RGB Observation - using kinect v2
     'RX200kinectReacherEESimRGB-v0',
@@ -94,6 +95,18 @@ register(
 register(
     id='RX200ReacherSim-v2',
     entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim_v2:RX200ReacherEnv',
+    max_episode_steps=100,
+)
+
+# RX200 Reacher Multiros Default Environment - v3 adds per-link FK
+# safety in execute_action (RX200RobotEnv._check_action_links_safe) so
+# the arm can't fold down with shoulder/elbow/wrist below the table
+# even when EE stays above. Also reads new safety rosparams from
+# rx200_reach_task_config.yaml (table_z, safety_z_margin[_real],
+# max_joint_delta[_real]).
+register(
+    id='RX200ReacherSim-v3',
+    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim_v3:RX200ReacherEnv',
     max_episode_steps=100,
 )
 
