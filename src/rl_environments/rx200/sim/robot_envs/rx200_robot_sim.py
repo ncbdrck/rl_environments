@@ -569,6 +569,7 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                     return False, f"joint[{idx}] delta {deltas[idx]:.3f} > {max_delta}"
 
         # Per-link z check via cached pykdl subchains.
+        per_link_z = []
         for link, (kin, n) in self._safety_kin.items():
             try:
                 pose = kin.forward(q[:n])
@@ -577,8 +578,21 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                 # fail safe by rejecting the action.
                 return False, f"FK failed for {link}: {e}"
             z = float(pose[2, 3])
+            per_link_z.append((link, z))
             if z < floor:
                 return False, f"{link} predicted z={z:.3f} < floor={floor:.3f}"
+
+        # Debug: log the first few safety calls of the env's lifetime so we
+        # can confirm the check is actually being entered (it should fire
+        # once per env-loop tick once init_done=True and an action exists).
+        # Counter is per-instance; not reset on reset() so the log stays
+        # compact instead of repeating every episode.
+        if not hasattr(self, "_safety_log_count"):
+            self._safety_log_count = 0
+        if self._safety_log_count < 3:
+            self._safety_log_count += 1
+            zs = ", ".join(f"{l.rsplit('/', 1)[-1]}={z:.3f}" for l, z in per_link_z)
+            rospy.loginfo(f"[SAFETY] call #{self._safety_log_count}: floor={floor:.3f}, {zs}")
 
         return True, None
 
