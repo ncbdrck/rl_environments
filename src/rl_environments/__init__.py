@@ -403,6 +403,27 @@ register(
     kwargs={'rgb_plus_depth_plus_normal_obs': True, 'normal_obs_only': False, 'ee_action_type': True}
 )
 
+# ============================ Ned2 Reacher Multiros Environments ============================
+
+# Ned2 Reacher Multiros Default Environment (standard, non-goal-conditioned)
+register(
+    id='NED2ReacherSim-v0',
+    entry_point='rl_environments.ned2.sim.task_envs.reach.ned2_reach_sim:NED2ReacherEnv',
+    max_episode_steps=100,
+)
+
+# Ned2 Reacher Multiros Goal Environment. Replaces the broken in-file
+# register block in ned2_reach_goal_sim.py whose entry_point pointed at
+# a non-existent module (ned2_kinect_reach_goal_sim). Convention now
+# matches RX200: all registrations live here, task env files don't
+# self-register.
+register(
+    id='NED2ReacherGoalSim-v0',
+    entry_point='rl_environments.ned2.sim.task_envs.reach.ned2_reach_goal_sim:NED2ReacherGoalEnv',
+    max_episode_steps=100,
+)
+
+
 # ---------------------------- Real Environments  ----------------------------
 # ============================ RX200 Reacher RealROS Environments ============================
 # RX200 Reacher RealROS Environment - Default

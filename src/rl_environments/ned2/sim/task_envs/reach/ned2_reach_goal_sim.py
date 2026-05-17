@@ -20,12 +20,9 @@ from multiros.utils import ros_common
 # from multiros.utils import ros_controllers
 from multiros.utils import ros_markers
 
-# Register your environment using the OpenAI register method to utilize gym.make("MyTaskGoalEnv-v0").
-register(
-    id='NED2ReacherGoalSim-v0',
-    entry_point='rl_environments.ned2.sim.task_envs.reach.ned2_kinect_reach_goal_sim:NED2ReacherGoalEnv',
-    max_episode_steps=1000,
-)
+# Registration moved to rl_environments/__init__.py so the entry_point
+# can be kept consistent with the actual module name (the previous in-file
+# register pointed at ned2_kinect_reach_goal_sim, which doesn't exist).
 
 
 
