@@ -331,6 +331,21 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                                                          base_link=self.ref_frame,
                                                          end_link=self.ee_link)
 
+        # Per-link FK chains for the safety check in _check_action_links_safe.
+        # See RX200RobotEnv (d8b5517) for the full rationale — short version:
+        # PyKDL's ChainFkSolverPos_recursive expects len(q) to match the
+        # *subchain* joint count, not the full arm DOF. Caching one
+        # KDLKinematics per check-link lets us slice q[:n] correctly.
+        self._safety_kin = {}
+        for _link in self.SAFETY_CHECK_LINKS:
+            try:
+                _kin = KDLKinematics(urdf=self.pykdl_robot,
+                                     base_link=self.ref_frame,
+                                     end_link=_link)
+                self._safety_kin[_link] = (_kin, int(_kin.num_joints))
+            except Exception as _e:
+                rospy.logwarn(f"[SAFETY] kinematics setup failed for {_link}: {_e}")
+
         """
         Finished __init__ method
         """
@@ -495,6 +510,80 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         done, ee_position, ee_ori = self.ros_kin.calculate_fk(joint_positions, des_frame=self.ee_link, euler=euler)
 
         return done, ee_position, ee_ori
+
+    # Arm links whose world z must stay above the table/ground for the
+    # action to be safe. Order matches the URDF chain shoulder→tool.
+    # joint5_motor (small fixed mounting link) and hand_link (downstream
+    # of wrist via fixed joints) are skipped — checking wrist_link and
+    # tool_link covers everything they bracket.
+    SAFETY_CHECK_LINKS = (
+        "ned2/shoulder_link",
+        "ned2/arm_link",
+        "ned2/elbow_link",
+        "ned2/forearm_link",
+        "ned2/wrist_link",
+        "ned2/tool_link",
+    )
+
+    def _check_action_links_safe(self, joint_targets, current_joints=None):
+        """
+        Predict each arm link's world z under ``joint_targets`` and reject
+        the action if any link would dip below ``table_z + safety_z_margin``.
+        Also caps |target - current| per joint at ``max_joint_delta``.
+
+        Mirrors RX200RobotEnv._check_action_links_safe (d8b5517) for Ned2.
+        See that method's docstring for the design rationale.
+
+        Rosparams (all under ``/ned2/``, with sim/real variants where the
+        real value should be tighter):
+          table_z, safety_z_margin[_real], max_joint_delta[_real]
+
+        Returns
+        -------
+        (safe, reason) : (bool, Optional[str])
+        """
+        is_real = bool(getattr(self, "is_real_robot", False))
+        table_z = float(rospy.get_param("/ned2/table_z", -0.005))
+        if is_real:
+            margin = float(rospy.get_param("/ned2/safety_z_margin_real", 0.030))
+            max_delta = float(rospy.get_param("/ned2/max_joint_delta_real", 0.15))
+        else:
+            margin = float(rospy.get_param("/ned2/safety_z_margin", 0.015))
+            max_delta = float(rospy.get_param("/ned2/max_joint_delta", 0.5))
+        floor = table_z + margin
+
+        q = np.asarray(joint_targets, dtype=np.float64)
+
+        # Per-joint delta cap (skipped when current pose is unknown).
+        if current_joints is not None:
+            cur = np.asarray(current_joints, dtype=np.float64)
+            if cur.shape == q.shape:
+                deltas = np.abs(q - cur)
+                if np.any(deltas > max_delta):
+                    idx = int(np.argmax(deltas))
+                    return False, f"joint[{idx}] delta {deltas[idx]:.3f} > {max_delta}"
+
+        # Per-link z check via cached pykdl subchains.
+        per_link_z = []
+        for link, (kin, n) in self._safety_kin.items():
+            try:
+                pose = kin.forward(q[:n])
+            except Exception as e:
+                return False, f"FK failed for {link}: {e}"
+            z = float(pose[2, 3])
+            per_link_z.append((link, z))
+            if z < floor:
+                return False, f"{link} predicted z={z:.3f} < floor={floor:.3f}"
+
+        # First-3-calls debug log — same idiom as RX200 (cd5d930).
+        if not hasattr(self, "_safety_log_count"):
+            self._safety_log_count = 0
+        if self._safety_log_count < 3:
+            self._safety_log_count += 1
+            zs = ", ".join(f"{l.rsplit('/', 1)[-1]}={z:.3f}" for l, z in per_link_z)
+            rospy.loginfo(f"[SAFETY] call #{self._safety_log_count}: floor={floor:.3f}, {zs}")
+
+        return True, None
 
     def calculate_ik(self, target_pos, ee_ori=np.array([0.0, 0.0, 0.0, 1.0])):
         """
