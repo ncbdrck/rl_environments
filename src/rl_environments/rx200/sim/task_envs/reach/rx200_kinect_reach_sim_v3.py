@@ -718,15 +718,29 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                 IK_found, joint_positions = self.calculate_ik(target_pos=action, ee_ori=self.ee_ori)
 
                 if IK_found:
-                    # we can use simple smoothing or direct trajectory execution
-                    if self.use_smoothing:
-                        self.movement_result = self.smooth_trajectory(joint_positions, self.action_speed)
+                    # Per-link FK safety: workspace + IK-feasible doesn't
+                    # mean every link stays above the table. The arm can
+                    # fold down with elbow/wrist below the surface even
+                    # when the EE target sits above. Reject and learn the
+                    # constraint via the not_within_goal_space penalty.
+                    safe, reason = self._check_action_links_safe(
+                        joint_positions, current_joints=self.joint_values
+                    )
+                    if not safe:
+                        if self.log_internal_state:
+                            rospy.logwarn(f"[SAFETY] EE action rejected: {reason}")
+                        self.movement_result = False
+                        self.within_goal_space = False
                     else:
-                        # execute the trajectory - EE
-                        self.movement_result = self.move_arm_joints(q_positions=joint_positions,
-                                                                    time_from_start=self.action_speed)
-                    # for dense reward calculation
-                    self.within_goal_space = True
+                        # we can use simple smoothing or direct trajectory execution
+                        if self.use_smoothing:
+                            self.movement_result = self.smooth_trajectory(joint_positions, self.action_speed)
+                        else:
+                            # execute the trajectory - EE
+                            self.movement_result = self.move_arm_joints(q_positions=joint_positions,
+                                                                        time_from_start=self.action_speed)
+                        # for dense reward calculation
+                        self.within_goal_space = True
 
                 else:
                     if self.log_internal_state:
@@ -794,16 +808,27 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
             # check if the action is within the workspace
             if self.check_action_within_workspace(action):
-
-                # we can use simple smoothing or direct trajectory execution
-                if self.use_smoothing:
-                    self.movement_result = self.smooth_trajectory(action, self.action_speed)
+                # Per-link FK safety: see EE branch above. self.joint_values
+                # was refreshed at the top of this delta-action block, so
+                # the delta cap can use it.
+                safe, reason = self._check_action_links_safe(
+                    action, current_joints=self.joint_values
+                )
+                if not safe:
+                    if self.log_internal_state:
+                        rospy.logwarn(f"[SAFETY] joint action rejected: {reason}")
+                    self.movement_result = False
+                    self.within_goal_space = False
                 else:
-                    # execute the trajectory - ros_controllers
-                    self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
+                    # we can use simple smoothing or direct trajectory execution
+                    if self.use_smoothing:
+                        self.movement_result = self.smooth_trajectory(action, self.action_speed)
+                    else:
+                        # execute the trajectory - ros_controllers
+                        self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
 
-                # for dense reward calculation
-                self.within_goal_space = True
+                    # for dense reward calculation
+                    self.within_goal_space = True
 
             else:
                 if self.log_internal_state:
