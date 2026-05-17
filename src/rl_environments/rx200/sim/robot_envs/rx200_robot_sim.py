@@ -322,6 +322,22 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                                                          base_link=self.ref_frame,
                                                          end_link=self.ee_link)
 
+        # Per-link FK chains for the safety check in _check_action_links_safe.
+        # Each subchain spans base_link → that link, so PyKDL's
+        # ChainFkSolverPos_recursive expects len(q) == kin.num_joints (NOT
+        # the full arm DOF). We store (kin, num_joints) so the safety check
+        # can slice the action vector correctly per link. Building these
+        # once at __init__ amortizes the URDF parse cost.
+        self._safety_kin = {}
+        for _link in self.SAFETY_CHECK_LINKS:
+            try:
+                _kin = KDLKinematics(urdf=self.pykdl_robot,
+                                     base_link=self.ref_frame,
+                                     end_link=_link)
+                self._safety_kin[_link] = (_kin, int(_kin.num_joints))
+            except Exception as _e:
+                rospy.logwarn(f"[SAFETY] kinematics setup failed for {_link}: {_e}")
+
         """
         Finished __init__ method
         """
@@ -486,6 +502,85 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         done, ee_position, ee_ori = self.ros_kin.calculate_fk(joint_positions, des_frame=self.ee_link, euler=euler)
 
         return done, ee_position, ee_ori
+
+    # Arm links whose world z must stay above the table for the action to be
+    # safe. Order matches the URDF chain shoulder→ee_gripper. ee_arm_link /
+    # gripper_prop_link / gripper_bar_link / fingers_link / left_finger_link
+    # / right_finger_link are rigidly downstream of gripper_link, so
+    # checking gripper_link covers them implicitly — saves ~4 FK calls per
+    # tick without coverage loss.
+    SAFETY_CHECK_LINKS = (
+        "rx200/shoulder_link",
+        "rx200/upper_arm_link",
+        "rx200/forearm_link",
+        "rx200/wrist_link",
+        "rx200/gripper_link",
+        "rx200/ee_gripper_link",
+    )
+
+    def _check_action_links_safe(self, joint_targets, current_joints=None):
+        """
+        Predict each arm link's world z under ``joint_targets`` and reject
+        the action if any link would dip below ``table_z + safety_z_margin``.
+        Also caps |target - current| per joint at ``max_joint_delta``.
+
+        Uses the per-link ``KDLKinematics`` instances cached in
+        ``self._safety_kin`` at __init__. Each subchain has its own joint
+        count, so we slice ``q[:n]`` before calling ``forward`` — passing
+        the full 5-DOF vector to a 1-joint subchain crashes the PyKDL C++
+        extension (asked me how I know).
+
+        Rosparams (all under ``/rx200/``, with sim/real variants where the
+        real value should be tighter):
+          table_z, safety_z_margin[_real], max_joint_delta[_real]
+
+        If ``current_joints`` is None, only the link-z check runs (the
+        delta cap needs a baseline). Callers without current state can
+        pass ``self.get_joint_angles()`` for a fresh read.
+
+        Returns
+        -------
+        (safe, reason) : (bool, Optional[str])
+            ``safe=True`` if every link is at or above the safety floor
+            AND no joint exceeds the per-step delta cap. ``reason`` is a
+            short string naming the first failure (link name + predicted
+            z, OR joint index + delta).
+        """
+        is_real = bool(getattr(self, "is_real_robot", False))
+        table_z = float(rospy.get_param("/rx200/table_z", -0.005))
+        if is_real:
+            margin = float(rospy.get_param("/rx200/safety_z_margin_real", 0.030))
+            max_delta = float(rospy.get_param("/rx200/max_joint_delta_real", 0.15))
+        else:
+            margin = float(rospy.get_param("/rx200/safety_z_margin", 0.015))
+            max_delta = float(rospy.get_param("/rx200/max_joint_delta", 0.5))
+        floor = table_z + margin
+
+        q = np.asarray(joint_targets, dtype=np.float64)
+
+        # Per-joint delta cap. Skipped when current pose is unknown
+        # (bootstrap / first-tick calls).
+        if current_joints is not None:
+            cur = np.asarray(current_joints, dtype=np.float64)
+            if cur.shape == q.shape:
+                deltas = np.abs(q - cur)
+                if np.any(deltas > max_delta):
+                    idx = int(np.argmax(deltas))
+                    return False, f"joint[{idx}] delta {deltas[idx]:.3f} > {max_delta}"
+
+        # Per-link z check via cached pykdl subchains.
+        for link, (kin, n) in self._safety_kin.items():
+            try:
+                pose = kin.forward(q[:n])
+            except Exception as e:
+                # FK failure on a link means we don't know the geometry —
+                # fail safe by rejecting the action.
+                return False, f"FK failed for {link}: {e}"
+            z = float(pose[2, 3])
+            if z < floor:
+                return False, f"{link} predicted z={z:.3f} < floor={floor:.3f}"
+
+        return True, None
 
     def calculate_ik(self, target_pos, ee_ori=np.array([0.0, 0.0, 0.0, 1.0])):
         """
