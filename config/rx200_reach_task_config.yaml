@@ -19,7 +19,10 @@ rx200: #namespace
       - 2.14  # wrist_angle
       - 3.12  # wrist_rotate
 
-    # Define the minimum and maximum joint values for grasping (not used for the reach task)
+    # Define the minimum and maximum joint values for grasping. Not used by
+    # the reach mixin — kept here so the YAML shape matches push / pnp / slide
+    # configs and any shared loader iterating over robots works without
+    # special-casing reach.
     min_joint_pos_grasp:
       - -3.12  # waist
       - -1.88  # shoulder
@@ -47,7 +50,9 @@ rx200: #namespace
     position_ee_min: # Minimum XYZ position for the EE
       x: -0.55
       y: -0.55
-      z: -0.55  # Near zero to prevent going below the table
+      z: -0.55  # Loose obs bound so transient sim states don't trip gymnasium's
+                # obs-not-in-space warning. The actual table floor is enforced
+                # by workspace_min.z + the per-link FK safety check, not here.
 
     rpy_ee_max: # Maximum roll, pitch, and yaw (RPY) values for the EE
       r: 6.2832
@@ -132,7 +137,10 @@ rx200: #namespace
 
     # ******** achieved_goal and desired_goal
 
-    # In this task this is the EE pose
+    # In this task this is the EE pose. z_min matches workspace_min.z (0.10)
+    # so an achieved goal can't legitimately sit below the safety-enforced
+    # floor; if obs reports a lower z, that's a real bug rather than a
+    # looseness we tolerate.
     position_achieved_goal_max: # Maximum XYZ position for the achieved_goal
       x: 0.55
       y: 0.55
@@ -140,9 +148,9 @@ rx200: #namespace
     position_achieved_goal_min: # Minimum XYZ position for the achieved_goal
       x: -0.55
       y: -0.55
-      z: 0.05  # Near zero to prevent going below the table
+      z: 0.10
 
-    # In this task, this is the same as goal
+    # In this task, this is the same as the goal sampling range.
     position_desired_goal_max: # Maximum XYZ position for the desired_goal
       x: 0.40
       y: 0.40
@@ -150,7 +158,7 @@ rx200: #namespace
     position_desired_goal_min: # Minimum XYZ position for the desired_goal
       x: 0.15
       y: -0.40
-      z: 0.05
+      z: 0.10
 
 
     # ******** Gazebo Simulation parameters
@@ -174,4 +182,28 @@ rx200: #namespace
     joint_limits_reward: -2.0
     none_exe_reward: -5.0
     not_within_goal_space_reward: -2.0
+
+
+    # ******** Safety (consumed by RX200RobotEnv per-link FK check)
+    # Floor is in base_link frame. RX200 is mounted with its base flush
+    # with the table top (z=0); -0.005 gives a 5 mm tolerance for the
+    # base-mount mesh dipping slightly below the surface in the URDF.
+    table_z: -0.005
+    # Minimum gap between any link's predicted world z and the table top
+    # at which we still allow the action to publish. Sim is loose; real
+    # is tighter because the per-step validator only sees the *target*
+    # pose, not the intermediate joint-space interpolation that may dip
+    # lower transiently.
+    safety_z_margin: 0.015
+    safety_z_margin_real: 0.030
+    # Per-step cap on |joint_target - current_joint|. Same sim/real
+    # reasoning: real keeps it small so a single rejected-then-clipped
+    # action can't whip the arm across half its envelope.
+    max_joint_delta: 0.5
+    max_joint_delta_real: 0.15
+    # Sensor freshness thresholds — env loop flags `sensor_timeout` in
+    # info_r if any tracked sensor's age exceeds these (real-side
+    # safeguard; sim joint_state_controller usually publishes reliably).
+    joint_state_timeout_s: 0.5
+    ee_pose_timeout_s: 0.5
 
