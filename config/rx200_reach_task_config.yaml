@@ -20,7 +20,7 @@ rx200: #namespace
       - 3.12  # wrist_rotate
 
     # Define the minimum and maximum joint values for grasping. Not used by
-    # the reach mixin — kept here so the YAML shape matches push / pnp / slide
+    # the reach mixin — kept here so the YAML shape matches push / pnp
     # configs and any shared loader iterating over robots works without
     # special-casing reach.
     min_joint_pos_grasp:
@@ -150,15 +150,17 @@ rx200: #namespace
       y: -0.55
       z: 0.10
 
-    # In this task, this is the same as the goal sampling range.
+    # In this task, this is the same as the goal sampling range — must
+    # mirror position_goal_max/min exactly so the obs-space declared
+    # bounds match the actual sampling support.
     position_desired_goal_max: # Maximum XYZ position for the desired_goal
-      x: 0.40
-      y: 0.40
-      z: 0.40
+      x: 0.25
+      y: 0.15
+      z: 0.25
     position_desired_goal_min: # Minimum XYZ position for the desired_goal
       x: 0.15
-      y: -0.40
-      z: 0.10
+      y: -0.15
+      z: 0.15
 
 
     # ******** Gazebo Simulation parameters

@@ -2,32 +2,29 @@
 Gymnasium registrations for the rl_environments package.
 
 Convention: **one id per task env file**. Configuration variants (RGB vs
-depth observations, joint vs EE action space, vision sensor combos) are
-exposed as ``__init__`` kwargs on the task env classes — pass them at
-construction time::
+depth observations, joint vs EE action space, vision sensor combos,
+real-time vs MDP pause-step-resume mode) are exposed as ``__init__``
+kwargs on the task env classes — pass them at construction time::
 
-    env = gym.make("RX200ReacherSim-v3",
+    env = gym.make("RX200ReacherSim-v0",
                    gazebo_gui=True,
                    ee_action_type=True,
                    rgb_obs_only=True, normal_obs_only=False,
-                   reward_type="Sparse")
+                   reward_type="Sparse",
+                   realtime_mode=True)
 
-Earlier the registry held ~46 ids: same files registered repeatedly with
-different ``kwargs={...}`` to expose each combo. Slimmed down 2026-05-17:
-all kwargs-only aliases dropped (33 ids removed); the remaining 13 ids
-each point at a distinct task env file.
+Iteration history: 2026-05-17 slim dropped 33 kwargs-only aliases (46 →
+13 ids). 2026-05-19 collapsed RX200 reach v0/v1/v2/v3 → single v0 and
+push v0/v1 → single v0; slide envs removed entirely. The polished
+per-link-FK-safe + close-race-guarded code (formerly v3 reach / v1
+push) is now the canonical v0.
 """
 from gymnasium.envs.registration import register
 
 
 ALL_REACH_SIM_NAMES = [
-    # Kinect-based RX200 reach — four design iterations preserved as
-    # separate ids. v3 is the latest (per-link FK safety + close-race
-    # guard). v0/v1/v2 kept for historical comparison.
+    # Kinect-based RX200 reach.
     "RX200ReacherSim-v0",
-    "RX200ReacherSim-v1",
-    "RX200ReacherSim-v2",
-    "RX200ReacherSim-v3",
     "RX200ReacherGoalSim-v0",
     # ZED2-based RX200 reach.
     "RX200Zed2ReacherSim-v0",
@@ -39,7 +36,16 @@ ALL_REACH_SIM_NAMES = [
 
 ALL_PUSH_SIM_NAMES = [
     "RX200PushSim-v0",
-    "RX200PushSim-v1",  # latest (per-link FK safety + close-race guard)
+    "RX200PushGoalSim-v0",
+    "RX200Zed2PushSim-v0",
+    "RX200Zed2PushGoalSim-v0",
+]
+
+ALL_PNP_SIM_NAMES = [
+    "RX200PnPSim-v0",
+    "RX200PnPGoalSim-v0",
+    "RX200Zed2PnPSim-v0",
+    "RX200Zed2PnPGoalSim-v0",
 ]
 
 ALL_REACH_REAL_NAMES = [
@@ -52,31 +58,10 @@ ALL_REACH_REAL_NAMES = [
 
 # ============================ RX200 Reacher Multiros Environments ============================
 
-# Kinect-based RX200 reach — historical iterations v0/v1/v2 kept registered
-# for side-by-side comparison; v3 is the polished, per-link-FK-safe variant.
+# Kinect-based RX200 reach — per-link FK safety + close-race guard wired in.
 register(
     id="RX200ReacherSim-v0",
     entry_point="rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim:RX200ReacherEnv",
-    max_episode_steps=100,
-)
-register(
-    id="RX200ReacherSim-v1",
-    entry_point="rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim_v1:RX200ReacherEnv",
-    max_episode_steps=100,
-)
-register(
-    id="RX200ReacherSim-v2",
-    entry_point="rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim_v2:RX200ReacherEnv",
-    max_episode_steps=100,
-)
-# v3 adds per-link FK safety in execute_action (via
-# RX200RobotEnv._check_action_links_safe) so the arm can't fold down with
-# shoulder/elbow/wrist below the table even when EE stays above. Also
-# reads new safety rosparams from rx200_reach_task_config.yaml
-# (table_z, safety_z_margin[_real], max_joint_delta[_real]).
-register(
-    id="RX200ReacherSim-v3",
-    entry_point="rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim_v3:RX200ReacherEnv",
     max_episode_steps=100,
 )
 
@@ -102,16 +87,58 @@ register(
 
 # ============================ RX200 Push Multiros Environments ============================
 
-# v0 and v1 are separate design iterations. v1 has per-link FK safety +
-# close-race guard wired in (a2f7e9b).
 register(
     id="RX200PushSim-v0",
     entry_point="rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim:RX200PushEnv",
     max_episode_steps=100,
 )
+
+# Kinect-based RX200 push, goal-conditioned (Dict obs space; HER-ready).
 register(
-    id="RX200PushSim-v1",
-    entry_point="rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim_v1:RX200PushEnv",
+    id="RX200PushGoalSim-v0",
+    entry_point="rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_goal_sim:RX200PushGoalEnv",
+    max_episode_steps=100,
+)
+
+# ZED2-based RX200 push (different vision sensor than kinect).
+register(
+    id="RX200Zed2PushSim-v0",
+    entry_point="rl_environments.rx200.sim.task_envs.push.rx200_zed2_push_sim:RX200PushEnv",
+    max_episode_steps=100,
+)
+register(
+    id="RX200Zed2PushGoalSim-v0",
+    entry_point="rl_environments.rx200.sim.task_envs.push.rx200_zed2_push_goal_sim:RX200PushGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ RX200 PnP Multiros Environments ============================
+
+# 5 arm joints + 1 gripper scalar = 6 DOF action (4 DOF in EE-action mode).
+# Gripper scalar drives left_finger directly; right_finger = -gripper_cmd
+# inside execute_action so the fingers move symmetrically. Goal box allows
+# elevated targets (z up to 0.25 m) — push restricts to ~table-top.
+register(
+    id="RX200PnPSim-v0",
+    entry_point="rl_environments.rx200.sim.task_envs.pnp.rx200_pnp_sim:RX200PnPEnv",
+    max_episode_steps=100,
+)
+register(
+    id="RX200PnPGoalSim-v0",
+    entry_point="rl_environments.rx200.sim.task_envs.pnp.rx200_pnp_goal_sim:RX200PnPGoalEnv",
+    max_episode_steps=100,
+)
+
+# ZED2-based RX200 PnP (different vision sensor than kinect).
+register(
+    id="RX200Zed2PnPSim-v0",
+    entry_point="rl_environments.rx200.sim.task_envs.pnp.rx200_zed2_pnp_sim:RX200PnPEnv",
+    max_episode_steps=100,
+)
+register(
+    id="RX200Zed2PnPGoalSim-v0",
+    entry_point="rl_environments.rx200.sim.task_envs.pnp.rx200_zed2_pnp_goal_sim:RX200PnPGoalEnv",
     max_episode_steps=100,
 )
 

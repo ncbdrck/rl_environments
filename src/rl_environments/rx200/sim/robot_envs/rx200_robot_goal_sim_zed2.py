@@ -321,6 +321,84 @@ class RX200RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
                                                          base_link=self.ref_frame,
                                                          end_link=self.ee_link)
 
+        # Per-link FK chains for the safety check in _check_action_links_safe.
+        # Each subchain spans base_link → that link, so PyKDL expects
+        # len(q) == kin.num_joints (NOT the full arm DOF).
+        self._safety_kin = {}
+        for _link in self.SAFETY_CHECK_LINKS:
+            try:
+                _kin = KDLKinematics(urdf=self.pykdl_robot,
+                                     base_link=self.ref_frame,
+                                     end_link=_link)
+                self._safety_kin[_link] = (_kin, int(_kin.num_joints))
+            except Exception as _e:
+                rospy.logwarn(f"[SAFETY] kinematics setup failed for {_link}: {_e}")
+
+    # Arm links whose world z must stay above the table for the action to be
+    # safe. Order matches the URDF chain shoulder→ee_gripper. Links rigidly
+    # downstream of gripper_link are covered implicitly.
+    SAFETY_CHECK_LINKS = (
+        "rx200/shoulder_link",
+        "rx200/upper_arm_link",
+        "rx200/forearm_link",
+        "rx200/wrist_link",
+        "rx200/gripper_link",
+        "rx200/ee_gripper_link",
+    )
+
+    def _check_action_links_safe(self, joint_targets, current_joints=None):
+        """
+        Predict each arm link's world z under ``joint_targets`` and reject
+        the action if any link would dip below ``table_z + safety_z_margin``.
+        Also caps |target - current| per joint at ``max_joint_delta``.
+
+        Rosparams (all under ``/rx200/``, with sim/real variants):
+          table_z, safety_z_margin[_real], max_joint_delta[_real]
+
+        Returns
+        -------
+        (safe, reason) : (bool, Optional[str])
+        """
+        is_real = bool(getattr(self, "is_real_robot", False))
+        table_z = float(rospy.get_param("/rx200/table_z", -0.005))
+        if is_real:
+            margin = float(rospy.get_param("/rx200/safety_z_margin_real", 0.030))
+            max_delta = float(rospy.get_param("/rx200/max_joint_delta_real", 0.15))
+        else:
+            margin = float(rospy.get_param("/rx200/safety_z_margin", 0.015))
+            max_delta = float(rospy.get_param("/rx200/max_joint_delta", 0.5))
+        floor = table_z + margin
+
+        q = np.asarray(joint_targets, dtype=np.float64)
+
+        if current_joints is not None:
+            cur = np.asarray(current_joints, dtype=np.float64)
+            if cur.shape == q.shape:
+                deltas = np.abs(q - cur)
+                if np.any(deltas > max_delta):
+                    idx = int(np.argmax(deltas))
+                    return False, f"joint[{idx}] delta {deltas[idx]:.3f} > {max_delta}"
+
+        per_link_z = []
+        for link, (kin, n) in self._safety_kin.items():
+            try:
+                pose = kin.forward(q[:n])
+            except Exception as e:
+                return False, f"FK failed for {link}: {e}"
+            z = float(pose[2, 3])
+            per_link_z.append((link, z))
+            if z < floor:
+                return False, f"{link} predicted z={z:.3f} < floor={floor:.3f}"
+
+        if not hasattr(self, "_safety_log_count"):
+            self._safety_log_count = 0
+        if self._safety_log_count < 3:
+            self._safety_log_count += 1
+            zs = ", ".join(f"{l.rsplit('/', 1)[-1]}={z:.3f}" for l, z in per_link_z)
+            rospy.loginfo(f"[SAFETY] call #{self._safety_log_count}: floor={floor:.3f}, {zs}")
+
+        return True, None
+
     # ---------------------------------------------------
     #   Custom methods for the RX200 Robot Environment
 

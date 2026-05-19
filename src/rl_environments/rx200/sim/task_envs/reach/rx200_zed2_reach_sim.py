@@ -60,6 +60,7 @@ class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
         * ee_action_type: Whether to use the end effector action space or the joint action space.
         * environment_loop_rate: Rate at which the environment should run. (in Hz) - default 10 Hz (default operating frequency of the robot)
         * action_cycle_time: Time to wait between two consecutive actions. (in seconds) - default 100 ms (should be equal to larger than the environment loop time "1/environment_loop_rate")
+        * realtime_mode: If True (default), runs the UniROS paper §7 real-time loop — physics is never paused, a rospy.Timer at ``environment_loop_rate`` updates obs/reward/done, and ``step()`` reads the latest cached values. This matches the real env, so policies transfer / concurrent sim+real learning Just Works. If False, runs the standard MDP loop — Gazebo physics is paused around each ``_set_action``, the action is executed synchronously, the agent waits ``action_cycle_time`` for the trajectory, then a fresh obs/reward/done is sampled. The non-realtime mode is for clean RL-algorithm benchmarking where you want every sample to correspond exactly to the post-action world state.
         * use_smoothing: Whether to use smoothing for actions or not.
         * rgb_obs_only: Whether to use only the RGB image as the observations or not.
         * normal_obs_only: Whether to use only the traditional observations or not.
@@ -80,7 +81,11 @@ class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
                  load_table: bool = True, debug: bool = False, action_speed: float = 0.5,
-                 simple_dense_reward: bool = True, log_internal_state: bool = False):
+                 simple_dense_reward: bool = True, log_internal_state: bool = False,
+                 realtime_mode: bool = True):
+
+        # Real-time vs normal MDP step mode. See docstring above.
+        self.realtime_mode = realtime_mode
 
         """
         variables to keep track of ros, gazebo ports and gazebo pid
@@ -379,8 +384,10 @@ class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
         """
         Init super class.
         """
+        # RX200RobotEnv (zed2) maps real_time → unpause_pause_physics; this
+        # single flag drives both step modes.
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-                         real_time=True, action_cycle_time=action_cycle_time, use_zed2=use_zed2,
+                         real_time=self.realtime_mode, action_cycle_time=action_cycle_time, use_zed2=use_zed2,
                          load_table=load_table)
 
         # for smoothing
@@ -409,8 +416,11 @@ class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
                 self.loop_counter = 0
                 self.action_counter = 0
 
-            # create a timer to run the environment loop
-            rospy.Timer(rospy.Duration(1.0 / environment_loop_rate), self.environment_loop)
+            # Real-time mode only: spin up the rospy.Timer-driven env loop
+            # (paper §7). Normal mode reuses the same cache but the compute
+            # happens synchronously inside _set_action — no timer.
+            if self.realtime_mode:
+                rospy.Timer(rospy.Duration(1.0 / environment_loop_rate), self.environment_loop)
 
         # for dense reward calculation
         self.action_not_in_limits = False
@@ -525,6 +535,13 @@ class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
         """
         Function to apply an action to the robot.
 
+        Real-time mode (default): stash the action; the timer-driven
+        environment_loop is what calls execute_action (paper §7).
+        Normal MDP mode (realtime_mode=False): execute the action
+        synchronously and clear the obs/reward/done cache so the
+        _get_* fallbacks resample against the post-action world after
+        GazeboBaseEnv.step's action_cycle_time sleep.
+
         Args:
             action: The action to be applied to the robot.
         """
@@ -532,9 +549,16 @@ class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
         self.prev_action = action.copy()
 
         if self.log_internal_state:
-            rospy.loginfo(f"Applying real-time action---> {action}")
+            rospy.loginfo(f"Applying action---> {action}")
 
         self.current_action = action.copy()
+
+        if not self.realtime_mode:
+            self.obs_r = None
+            self.reward_r = None
+            self.terminated_r = None
+            self.info_r = {}
+            self.execute_action(action)
 
         # for debugging
         if self.debug:
@@ -714,10 +738,26 @@ class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
                 IK_found, joint_positions = self.calculate_ik(target_pos=action, ee_ori=self.ee_ori)
 
                 if IK_found:
-                    # execute the trajectory - EE
-                    self.movement_result = self.move_arm_joints(q_positions=joint_positions,
-                                                                time_from_start=self.action_speed)
-                    self.within_goal_space = True
+                    # Per-link FK safety: workspace + IK-feasible doesn't
+                    # mean every link stays above the table. hasattr guard
+                    # lets this run against the legacy zed2 RobotEnv (no
+                    # safety method yet) — auto-activates once ported.
+                    if hasattr(self, "_check_action_links_safe"):
+                        safe, reason = self._check_action_links_safe(
+                            joint_positions, current_joints=self.joint_values
+                        )
+                    else:
+                        safe, reason = True, None
+                    if not safe:
+                        if self.log_internal_state:
+                            rospy.logwarn(f"[SAFETY] EE action rejected: {reason}")
+                        self.movement_result = False
+                        self.within_goal_space = False
+                    else:
+                        # execute the trajectory - EE
+                        self.movement_result = self.move_arm_joints(q_positions=joint_positions,
+                                                                    time_from_start=self.action_speed)
+                        self.within_goal_space = True
 
                 else:
                     if self.log_internal_state:
@@ -737,6 +777,11 @@ class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
 
             # --- Make actions as deltas
             if self.delta_action:
+
+                # Refresh joint_values inline so the delta is computed against
+                # the live joint state (needed in normal MDP mode where there's
+                # no env_loop refreshing it).
+                self.joint_values = self.get_joint_angles()
 
                 # we can use smoothing using the action_cycle_time or delta_coeff
                 if self.use_smoothing:
@@ -782,9 +827,23 @@ class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
 
             # check if the action is within the workspace
             if self.check_action_within_workspace(action):
-                # execute the trajectory - ros_controllers
-                self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
-                self.within_goal_space = True
+                # Per-link FK safety: see EE branch above. hasattr guard
+                # for the same reason.
+                if hasattr(self, "_check_action_links_safe"):
+                    safe, reason = self._check_action_links_safe(
+                        action, current_joints=self.joint_values
+                    )
+                else:
+                    safe, reason = True, None
+                if not safe:
+                    if self.log_internal_state:
+                        rospy.logwarn(f"[SAFETY] joint action rejected: {reason}")
+                    self.movement_result = False
+                    self.within_goal_space = False
+                else:
+                    # execute the trajectory - ros_controllers
+                    self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
+                    self.within_goal_space = True
 
             else:
                 if self.log_internal_state:

@@ -21,19 +21,15 @@ from multiros.utils import ros_controllers
 from multiros.utils import ros_markers
 
 # Register your environment using the gymnasium register method to utilize gym.make("TaskEnv-v0").
-register(
-    id='RX200ReacherSim-v0',
-    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim:RX200ReacherEnv',
-    max_episode_steps=1000,
-)
+# register(
+#     id='RX200ReacherSim-v2',
+#     entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_sim_v2:RX200ReacherEnv',
+#     max_episode_steps=1000,
+# )
 
 """
-This is the v0 of the RX200 Reacher Task Environment.
-- uses the kinect v2 sensor
-- option to use vision sensors - depth and rgb images
-- action space is joint positions of the robot arm or xyz position of the end effector. No gripper control
-- reward is sparse or dense
-- goal is to reach a goal position
+This is the v2 of the RX200 Reacher Task Environment.
+- updated the smoothing algo for the actions
 """
 
 
@@ -61,6 +57,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         * ee_action_type: Whether to use the end effector action space or the joint action space.
         * environment_loop_rate: Rate at which the environment should run. (in Hz) - default 10 Hz (default operating frequency of the robot)
         * action_cycle_time: Time to wait between two consecutive actions. (in seconds) - default 100 ms (should be equal to larger than the environment loop time "1/environment_loop_rate")
+        * realtime_mode: If True (default), runs the UniROS paper §7 real-time loop — physics is never paused, a rospy.Timer at ``environment_loop_rate`` updates obs/reward/done, and ``step()`` reads the latest cached values. This matches the real env, so policies transfer / concurrent sim+real learning Just Works. If False, runs the standard MDP loop — Gazebo physics is paused around each ``_set_action``, the action is executed synchronously, the agent waits ``action_cycle_time`` for the trajectory, then a fresh obs/reward/done is sampled. The non-realtime mode is for clean RL-algorithm benchmarking where you want every sample to correspond exactly to the post-action world state.
         * use_smoothing: Whether to use smoothing for actions or not.
         * rgb_obs_only: Whether to use only the RGB image as the observations or not.
         * normal_obs_only: Whether to use only the traditional observations or not.
@@ -71,6 +68,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         * action_speed: set the speed to complete the trajectory. default in 0.5 seconds
         * simple_dense_reward: Whether to use a simple dense reward or not.
         * log_internal_state: Whether to log the internal state of the environment or not.
+        * extra_smoothing: Whether to use extra smoothing for actions or not.
 
     """
 
@@ -81,7 +79,13 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
                  load_table: bool = True, debug: bool = False, action_speed: float = 0.5,
-                 simple_dense_reward: bool = True, log_internal_state: bool = False):
+                 simple_dense_reward: bool = True, log_internal_state: bool = False, extra_smoothing: bool = False,
+                 realtime_mode: bool = True):
+
+        # Real-time vs normal MDP step mode. See docstring above.
+        # Stored early so it's available when we decide whether to register
+        # the rospy.Timer below.
+        self.realtime_mode = realtime_mode
 
         """
         variables to keep track of ros, gazebo ports and gazebo pid
@@ -186,6 +190,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         Use smoothing for actions
         """
         self.use_smoothing = use_smoothing
+        self.extra_smoothing = extra_smoothing
         self.action_cycle_time = action_cycle_time
 
         """
@@ -259,10 +264,10 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         06. Joint velocities - 8
 
         total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
-        
+
         # depth image
         480x640 32FC1
-        
+
         # rgb image
         480x640X3 RGB images
         """
@@ -375,17 +380,20 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         Define subscribers/publishers and Markers as needed.
         """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
-                                                 lifetime=30.0)
+                                                 lifetime=20.0)
 
         """
         Init super class.
         """
+        # RX200RobotEnv maps real_time → unpause_pause_physics (False when real_time,
+        # True otherwise), so this single flag drives whether GazeboBaseEnv.step()
+        # pauses physics around _set_action.
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-                         real_time=True, action_cycle_time=action_cycle_time, use_kinect=use_kinect,
+                         real_time=self.realtime_mode, action_cycle_time=action_cycle_time, use_kinect=use_kinect,
                          load_table=load_table)
 
         # for smoothing
-        if self.use_smoothing:
+        if self.extra_smoothing:
             if self.ee_action_type:
                 self.action_vector = np.zeros(3, dtype=np.float32)
             else:
@@ -410,8 +418,12 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                 self.loop_counter = 0
                 self.action_counter = 0
 
-            # create a timer to run the environment loop
-            rospy.Timer(rospy.Duration(1.0 / environment_loop_rate), self.environment_loop)
+            # Real-time mode: spin up the rospy.Timer that drives the env loop
+            # (paper §7). Normal mode reuses the same obs_r/reward_r/... cache
+            # but does the compute synchronously inside _set_action, so we
+            # don't register the timer.
+            if self.realtime_mode:
+                rospy.Timer(rospy.Duration(1.0 / environment_loop_rate), self.environment_loop)
 
         # for dense reward calculation
         self.action_not_in_limits = False
@@ -447,7 +459,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         self.current_action = None
 
         # for smoothing
-        if self.use_smoothing:
+        if self.extra_smoothing:
             if self.ee_action_type:
                 self.action_vector = np.zeros(3, dtype=np.float32)
             else:
@@ -485,7 +497,8 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
         self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
         self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # for IK calculation - EE actions
+                                ee_pos_tmp.pose.orientation.z,
+                                ee_pos_tmp.pose.orientation.w])  # for IK calculation - EE actions
         self.joint_values = self.get_joint_angles()
 
         # for dense reward calculation
@@ -526,6 +539,18 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         """
         Function to apply an action to the robot.
 
+        Real-time mode (default): stash the action in ``self.current_action``
+        and return immediately. The rospy.Timer-driven ``environment_loop``
+        is what actually calls ``execute_action`` (with action repeats per
+        paper §7); ``GazeboBaseEnv.step`` then sleeps ``action_cycle_time``
+        and reads the cached ``obs_r/reward_r/...`` the loop has refreshed.
+
+        Normal MDP mode (``realtime_mode=False``): execute the action right
+        here, synchronously. ``GazeboBaseEnv.step`` will then sleep
+        ``action_cycle_time`` for the trajectory to play out before calling
+        ``_get_observation``, which falls back to a fresh ``sample_observation``
+        because we clear the cache below.
+
         Args:
             action: The action to be applied to the robot.
         """
@@ -533,13 +558,24 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         self.prev_action = action.copy()
 
         if self.log_internal_state:
-            rospy.loginfo(f"Applying real-time action---> {action}")
+            rospy.loginfo(f"Applying action---> {action}")
 
         self.current_action = action.copy()
 
         # for debugging
         if self.debug:
             self.action_counter = 0  # reset the action counter
+
+        if not self.realtime_mode:
+            # Clear cached state so _get_observation / _get_reward /
+            # _compute_terminated all fall back to fresh compute against
+            # the world *after* the action has played out (the sleep
+            # happens after _set_action returns, inside GazeboBaseEnv.step).
+            self.obs_r = None
+            self.reward_r = None
+            self.terminated_r = None
+            self.info_r = {}
+            self.execute_action(action)
 
     def _get_observation(self):
         """
@@ -632,6 +668,20 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         #  we don't need to execute the loop until we reset the env
         if self.init_done:
 
+            # Close-race guard: the rospy.Timer that drives this loop
+            # keeps firing during env.close() while MoveIt cleanup runs
+            # its 1s wait_for_message timeouts (×N). joint_states stops
+            # publishing once controllers are unspawned, so get_joint_angles
+            # can start returning an empty list, and the delta-action
+            # broadcast in execute_action crashes (Thread-N ValueError:
+            # shapes (0,) (5,) noticed during shutdown of v2). Bail out
+            # cleanly if ROS is shutting down or joint state is stale.
+            if rospy.is_shutdown():
+                return
+            jv = getattr(self, "joint_values", None)
+            if jv is None or len(jv) < 5:
+                return
+
             if self.debug:
                 if self.log_internal_state:
                     rospy.loginfo(f"Starting RL loop --->: {self.loop_counter}")
@@ -672,10 +722,14 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         # --- EE action
         if self.ee_action_type:
 
+            # --- Get the current EE position
+            ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
+            self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+
             # --- Make actions as deltas
             if self.delta_action:
                 # we can use smoothing using the action_cycle_time or delta_coeff
-                if self.use_smoothing:
+                if self.extra_smoothing:
                     if self.action_cycle_time == 0.0:
                         # first derivative of the action
                         self.action_vector = self.action_vector + (self.delta_coeff * action)
@@ -715,10 +769,29 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                 IK_found, joint_positions = self.calculate_ik(target_pos=action, ee_ori=self.ee_ori)
 
                 if IK_found:
-                    # execute the trajectory - EE
-                    self.movement_result = self.move_arm_joints(q_positions=joint_positions,
-                                                                time_from_start=self.action_speed)
-                    self.within_goal_space = True
+                    # Per-link FK safety: workspace + IK-feasible doesn't
+                    # mean every link stays above the table. The arm can
+                    # fold down with elbow/wrist below the surface even
+                    # when the EE target sits above. Reject and learn the
+                    # constraint via the not_within_goal_space penalty.
+                    safe, reason = self._check_action_links_safe(
+                        joint_positions, current_joints=self.joint_values
+                    )
+                    if not safe:
+                        if self.log_internal_state:
+                            rospy.logwarn(f"[SAFETY] EE action rejected: {reason}")
+                        self.movement_result = False
+                        self.within_goal_space = False
+                    else:
+                        # we can use simple smoothing or direct trajectory execution
+                        if self.use_smoothing:
+                            self.movement_result = self.smooth_trajectory(joint_positions, self.action_speed)
+                        else:
+                            # execute the trajectory - EE
+                            self.movement_result = self.move_arm_joints(q_positions=joint_positions,
+                                                                        time_from_start=self.action_speed)
+                        # for dense reward calculation
+                        self.within_goal_space = True
 
                 else:
                     if self.log_internal_state:
@@ -739,8 +812,11 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
             # --- Make actions as deltas
             if self.delta_action:
 
+                # get the current joint values
+                self.joint_values = self.get_joint_angles()
+
                 # we can use smoothing using the action_cycle_time or delta_coeff
-                if self.use_smoothing:
+                if self.extra_smoothing:
                     if self.action_cycle_time == 0.0:
                         # first derivative of the action
                         self.action_vector = self.action_vector + (self.delta_coeff * action)
@@ -783,9 +859,27 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
             # check if the action is within the workspace
             if self.check_action_within_workspace(action):
-                # execute the trajectory - ros_controllers
-                self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
-                self.within_goal_space = True
+                # Per-link FK safety: see EE branch above. self.joint_values
+                # was refreshed at the top of this delta-action block, so
+                # the delta cap can use it.
+                safe, reason = self._check_action_links_safe(
+                    action, current_joints=self.joint_values
+                )
+                if not safe:
+                    if self.log_internal_state:
+                        rospy.logwarn(f"[SAFETY] joint action rejected: {reason}")
+                    self.movement_result = False
+                    self.within_goal_space = False
+                else:
+                    # we can use simple smoothing or direct trajectory execution
+                    if self.use_smoothing:
+                        self.movement_result = self.smooth_trajectory(action, self.action_speed)
+                    else:
+                        # execute the trajectory - ros_controllers
+                        self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
+
+                    # for dense reward calculation
+                    self.within_goal_space = True
 
             else:
                 if self.log_internal_state:
@@ -943,7 +1037,7 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
                     # done (green) goal_marker
                     self.goal_marker.set_color(r=0.0, g=1.0)
-                    self.goal_marker.set_duration(duration=5)
+                    self.goal_marker.set_duration(duration=30)
 
                 else:
                     # not done (red) goal_marker

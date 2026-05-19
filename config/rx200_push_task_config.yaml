@@ -82,6 +82,42 @@ rx200: #namespace
       p: -6.28
       y: -6.28
 
+    # Cube velocities — finite-differenced from cube pose (sim and real
+    # share the same code path; no Gazebo-specific twist API needed).
+    # ±2 m/s leaves slack for transient sim spikes; a pushed cube
+    # typically slides at <1 m/s.
+    linear_velocity_cube_max:
+      x: 2.0
+      y: 2.0
+      z: 2.0
+    linear_velocity_cube_min:
+      x: -2.0
+      y: -2.0
+      z: -2.0
+
+    # Angular velocity in rad/s. ±20 covers a tumbling/spinning cube
+    # under push contact; nominal pushing rarely exceeds a few rad/s.
+    angular_velocity_cube_max:
+      r: 20.0
+      p: 20.0
+      y: 20.0
+    angular_velocity_cube_min:
+      r: -20.0
+      p: -20.0
+      y: -20.0
+
+    # Cube position relative to the EE (cube_pos - ee_pos). Bounds
+    # derived from workspace span — cube can be anywhere reachable
+    # relative to the EE.
+    cube_rel_to_ee_max:
+      x: 1.10
+      y: 1.10
+      z: 1.10
+    cube_rel_to_ee_min:
+      x: -1.10
+      y: -1.10
+      z: -1.10
+
     # not used in this task (so values are not set)
     linear_distance_max: # Maximum distance from cube to the desired goal (spans 110cm)
       x: 1.00
