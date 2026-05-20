@@ -54,9 +54,11 @@ goal-env scaffolding: Pose unpacking, GoalEnv hooks, HER safety):
     just before dispatch and ONLY call the action server when the
     discretized state changes vs the previous dispatch (state-change-only
     dispatch — the action server blocks on ``wait_for_result``).
-  * is_grasped is derived from the ``joint_base_to_mors_1`` joint state
-    (NED2's left gripper revolute joint, in RADIANS — semantics differ
-    from RX200's prismatic-finger meters; tune the threshold accordingly).
+  * is_grasped is derived from the ``joint_base_to_mors_1`` joint state.
+    The mors joints are PRISMATIC in metres (URDF: ±0.01 m stroke,
+    type="prismatic") — SAME units as RX200's prismatic fingers, just
+    symmetric around 0 with a tighter range. The YAML threshold should
+    be tuned for NED2's range (≈ 0 m is roughly mid-stroke).
   * ``gripper=True`` is passed to the super-class so the gripper-equipped
     URDF + tools_commander controller are loaded.
   * GoalEnv API: compute_reward / compute_terminated / compute_truncated
@@ -1288,10 +1290,11 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         # AND finger-close position. Robust lookup by joint name so we
         # don't depend on a fixed joint_pos_all ordering. NED2's left
         # gripper joint is ``joint_base_to_mors_1``.
-        # TODO: confirm NED2 pnp grasp_finger_thresh against the actual
-        # joint_base_to_mors_1 closed/open positions (the mors joints are
-        # revolute in radians on NED2 vs prismatic meters on RX200, so
-        # the threshold semantics are different).
+        # The mors joints are PRISMATIC in metres (URDF: ±0.01 m stroke)
+        # — same units as RX200's prismatic fingers, just symmetric
+        # around 0 with a tighter range. grasp_finger_thresh in the
+        # YAML is the position (m) below which we treat fingers as
+        # "closed on something". TODO: empirically calibrate.
         try:
             _lf_idx = self.joint_state.name.index("joint_base_to_mors_1")
             _left_finger_pos = float(self.joint_state.position[_lf_idx])
@@ -1740,9 +1743,10 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
 
         # Grasp-detection thresholds (drive is_grasped in obs + dense reward)
         # and multi-goal lift height. NED2's left finger joint is the
-        # ``joint_base_to_mors_1`` revolute joint (radians) — the threshold
-        # semantics differ from RX200's prismatic-finger meters, so the
-        # YAML value should be tuned for NED2.
+        # ``joint_base_to_mors_1`` PRISMATIC joint (metres, URDF: ±0.01 m
+        # stroke). Same units as RX200's prismatic fingers — only the
+        # stroke magnitude differs, so the YAML threshold should be
+        # tuned for NED2's tighter range.
         self.grasp_dist_thresh = float(rospy.get_param('/ned2/grasp_dist_thresh'))
         self.grasp_finger_thresh = float(rospy.get_param('/ned2/grasp_finger_thresh'))
         self.lift_height = float(rospy.get_param('/ned2/lift_height'))

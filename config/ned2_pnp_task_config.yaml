@@ -9,7 +9,7 @@ ned2: #namespace
     # scalar (see gripper_min/max below).
     min_joint_pos:
       - -2.949  # joint_1 (waist)
-      - -2.09   # joint_2 (shoulder)
+      - -1.833  # joint_2 (shoulder)  (URDF: -105° = -1.833 rad)
       - -1.34   # joint_3 (elbow)
       - -2.089  # joint_4 (wrist1)
       - -1.919  # joint_5 (wrist2)
@@ -24,18 +24,27 @@ ned2: #namespace
       - 2.53
 
     # Joint limits with gripper for PnP. NED2's gripper1 uses two
-    # mors revolute joints (radians) instead of RX200's prismatic
-    # fingers (metres). TODO: confirm mors open/close limits against
-    # niryo_robot_description URDF — placeholders below.
+    # mors PRISMATIC joints (metres) — NOT revolute (radians) like an
+    # earlier mistaken assumption. Verified against
+    # niryo_ned2_gripper1_n_camera.urdf.xacro: <joint name="joint_base_to_mors_*"
+    # type="prismatic"> with limits lower="-0.01" upper="0.01" (i.e.
+    # ±10 mm linear stroke). Both mors slide symmetrically — total
+    # finger opening is therefore ~0.02 m.
+    #
+    # Note: these bounds describe what we OBSERVE in joint_state; the
+    # gripper is COMMANDED via niryo_robot_tools_commander as binary
+    # open / close (no position control). See gripper_min/max below for
+    # the agent's scalar action range that we discretize into the
+    # binary command.
     min_joint_pos_grasp:
       - -2.949  # joint_1
-      - -2.09   # joint_2
+      - -1.833  # joint_2  (URDF: -105° = -1.833 rad)
       - -1.34   # joint_3
       - -2.089  # joint_4
       - -1.919  # joint_5
       - -2.53   # joint_6
-      - 0.0     # joint_base_to_mors_1 (radians, closed)  # TODO: confirm
-      - 0.0     # joint_base_to_mors_2 (radians, closed)  # TODO: confirm
+      - -0.01   # joint_base_to_mors_1 (metres, prismatic — fully closed)
+      - -0.01   # joint_base_to_mors_2 (metres, prismatic — fully closed)
 
     max_joint_pos_grasp:
       - 2.949
@@ -44,8 +53,8 @@ ned2: #namespace
       - 2.089
       - 1.922
       - 2.53
-      - 0.5     # joint_base_to_mors_1 (radians, open)  # TODO: confirm
-      - 0.5     # joint_base_to_mors_2 (radians, open)  # TODO: confirm
+      - 0.01    # joint_base_to_mors_1 (metres, prismatic — fully open)
+      - 0.01    # joint_base_to_mors_2 (metres, prismatic — fully open)
 
 
     # ******** Observation Space
@@ -124,16 +133,16 @@ ned2: #namespace
 
     max_distance: 0.50  # PnP can place at height — distance can exceed push.
 
-    # 8 values: 6 arm joints + 2 mors revolute joints (radians).
+    # 8 values: 6 arm joints + 2 mors PRISMATIC joints (metres).
     min_joint_angles:
       - -2.949
-      - -2.09
+      - -1.833  # joint_2 (URDF: -105° = -1.833 rad)
       - -1.34
       - -2.089
       - -1.919
       - -2.53
-      - 0.0
-      - 0.0
+      - -0.01   # mors_1 (metres)
+      - -0.01   # mors_2 (metres)
 
     max_joint_angles:
       - 2.949
@@ -142,10 +151,13 @@ ned2: #namespace
       - 2.089
       - 1.922
       - 2.53
-      - 0.5
-      - 0.5
+      - 0.01    # mors_1 (metres)
+      - 0.01    # mors_2 (metres)
 
-    # Joint velocities (8): 6 arm + 2 mors.
+    # Joint velocities (8): 6 arm (rad/s) + 2 mors (m/s, prismatic).
+    # Arm values are conservative — MoveIt joint_limits.yaml permits up to
+    # 1.57 / 1.047 / 1.57 / 3.14 / 3.14 / 3.14 rad/s. URDF mors velocity
+    # limit is 5 m/s.
     min_joint_vel:
       - 0.0
       - 0.0
@@ -163,8 +175,8 @@ ned2: #namespace
       - 1.57
       - 1.57
       - 1.775
-      - 3.14   # mors_1 (rad/s)  # TODO: confirm
-      - 3.14   # mors_2 (rad/s)  # TODO: confirm
+      - 5.0    # mors_1 (m/s, URDF)
+      - 5.0    # mors_2 (m/s, URDF)
 
 
     # ******** goal space — PnP releases the table-z constraint
@@ -226,14 +238,19 @@ ned2: #namespace
 
     # ******** Grasp-detection thresholds (used to derive is_grasped in obs
     # and to gate the grasp-aware dense reward terms).
-    # IMPORTANT: NED2's mors joints are REVOLUTE (radians), not prismatic
-    # (metres) like RX200's fingers — the threshold semantics differ
-    # fundamentally. Empirically calibrate against your mors joint
-    # closed/open angles.
-    grasp_dist_thresh: 0.05     # m, EE-to-cube distance ceiling
-    grasp_finger_thresh: 0.10   # rad, joint_base_to_mors_1 angle ceiling
-                                # (treat as "closed" when below).
-                                # TODO: empirically confirm against cube grasp
+    # NED2's mors joints are PRISMATIC (metres) — same kind as RX200's
+    # fingers, just symmetric around 0 with a tighter ±10 mm stroke.
+    # "Closed" means joint_base_to_mors_1 sits near its lower bound
+    # (≤ 0 m); "open" means it sits near its upper bound (≥ ~0.005 m).
+    # The threshold below puts the divide just below midstroke — when
+    # the mors_1 reading is below this, treat as "fingers actively
+    # closing on something".
+    grasp_dist_thresh: 0.05    # m, EE-to-cube distance ceiling
+    grasp_finger_thresh: 0.0   # m, joint_base_to_mors_1 position ceiling
+                               # (treat as closed if reading < this).
+                               # TODO: empirically tune against an actual
+                               # cube grasp — the stroke is tiny (20 mm)
+                               # so the exact threshold matters.
 
     # Multi-goal scaffolding (used only when multi_goal=True).
     lift_height: 0.15  # m, intermediate (lift) goal above the cube
