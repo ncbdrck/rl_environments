@@ -992,15 +992,29 @@ class RX200PushGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         current_goal = self.push_goal
 
         # --- Get the current cube position and orientation
-        cube_pose_done, self.cube_pos, self.cube_ori = self.get_model_pose()
+        # GoalEnv variant of the robot env returns a single
+        # geometry_msgs/Pose (not the 3-tuple the standard robot env
+        # gives). Adapt it inline here: pose=None means lookup failed.
+        cube_pose_msg = self.get_model_pose()
+        if cube_pose_msg is None:
+            cube_pose_done = False
+        else:
+            cube_pose_done = True
+            self.cube_pos = np.array([cube_pose_msg.position.x,
+                                      cube_pose_msg.position.y,
+                                      cube_pose_msg.position.z], dtype=np.float32)
+            self.cube_ori = np.array(tf.transformations.euler_from_quaternion([
+                cube_pose_msg.orientation.x, cube_pose_msg.orientation.y,
+                cube_pose_msg.orientation.z, cube_pose_msg.orientation.w]),
+                dtype=np.float32)
 
         # if the cube pose is not found, we can set the current cube pos to 0
         # we need to set this to 0 so that we can get the observations
         if not cube_pose_done:
             if self.log_internal_state:
                 rospy.logwarn("Cube pose not found!")
-            self.cube_pos = np.array([0.0, 0.0, 0.0])
-            self.cube_ori = np.array([0.0, 0.0, 0.0])
+            self.cube_pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+            self.cube_ori = np.array([0.0, 0.0, 0.0], dtype=np.float32)
 
         # publish the cube pos marker
         self.cube_marker.set_position(position=self.cube_pos)
