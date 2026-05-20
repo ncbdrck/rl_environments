@@ -85,7 +85,10 @@ class RX200PushEnv(rx200_robot_real.RX200RobotEnv):
                  debug: bool = False, action_speed: float = 0.5,
                  simple_dense_reward: bool = True, log_internal_state: bool = False, random_goal: bool = False,
                  use_kinect: bool = False, use_zed2: bool = False,
-                 cube_pose_topic: str = "/cube_pose"):
+                 cube_pose_topic: str = "/cube_pose",
+                 auto_launch_cube_tracker: bool = False,
+                 cube_tracker_camera: str = "kinect2",
+                 cube_tracker_target_frame: str = ""):
 
         """
         variables to keep track of ros port
@@ -433,6 +436,35 @@ class RX200PushEnv(rx200_robot_real.RX200RobotEnv):
         # message arrives within ``cube_pose_timeout_s`` we fall back to
         # ``cube_init_pos`` from config so the env still runs (e.g. dry
         # run with no vision).
+        #
+        # Opt-in convenience: if ``auto_launch_cube_tracker`` is True we
+        # roslaunch rl_envs_cube_tracker/<camera>.launch from inside the
+        # env (registered with the managed-process registry, so env.close
+        # tears it down). Default False to preserve the documented
+        # "vision is deliberately external" contract — mocap / YOLO /
+        # custom-detector users want their own pipeline, not AprilTag.
+        if auto_launch_cube_tracker:
+            if cube_tracker_camera not in ("kinect2", "zed2"):
+                raise ValueError(
+                    f"cube_tracker_camera must be 'kinect2' or 'zed2', "
+                    f"got {cube_tracker_camera!r}"
+                )
+            _tracker_args = []
+            if cube_pose_topic != "/cube_pose":
+                _tracker_args.append(f"output_topic:={cube_pose_topic}")
+            if cube_tracker_target_frame:
+                _tracker_args.append(f"target_frame:={cube_tracker_target_frame}")
+            rospy.loginfo(
+                f"[auto-launch] rl_envs_cube_tracker {cube_tracker_camera}.launch "
+                f"{' '.join(_tracker_args) if _tracker_args else '(no extra args)'}"
+            )
+            ros_common.ros_launch_launcher(
+                pkg_name="rl_envs_cube_tracker",
+                launch_file_name=f"{cube_tracker_camera}.launch",
+                args=_tracker_args if _tracker_args else None,
+                launch_new_term=True,
+            )
+
         self.cube_pose_topic = cube_pose_topic
         self._latest_cube_pose_msg = None
         self._latest_cube_pose_time = None
