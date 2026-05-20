@@ -372,11 +372,11 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         -------
         (safe, reason) : (bool, Optional[str])
         """
-        is_real = bool(getattr(self, "is_real_robot", False))
+        strict = bool(getattr(self, "enable_strict_safety", False))
         table_z = float(rospy.get_param("/rx200/table_z", -0.005))
-        if is_real:
-            margin = float(rospy.get_param("/rx200/safety_z_margin_real", 0.030))
-            max_delta = float(rospy.get_param("/rx200/max_joint_delta_real", 0.15))
+        if strict:
+            margin = float(rospy.get_param("/rx200/safety_z_margin_strict", 0.030))
+            max_delta = float(rospy.get_param("/rx200/max_joint_delta_strict", 0.15))
         else:
             margin = float(rospy.get_param("/rx200/safety_z_margin", 0.015))
             max_delta = float(rospy.get_param("/rx200/max_joint_delta", 0.5))

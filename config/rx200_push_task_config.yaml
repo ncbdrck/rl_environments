@@ -227,6 +227,17 @@ rx200: #namespace
     gazebo_update_rate_multiplier: 1.0
 
 
+    # ******** Real-side cube tracking (consumed by RX200PushReal /
+    # RX200PushGoalReal). Real envs subscribe to a vision pipeline
+    # that publishes geometry_msgs/PoseStamped on ``cube_pose_topic``.
+    # If no message arrives within cube_pose_timeout_s, the env falls
+    # back to ``cube_init_pos`` and emits a throttled warning. The
+    # fallback path keeps the env constructible during dry-runs /
+    # code review even when no vision pipeline is wired up.
+    cube_pose_timeout_s: 1.0
+    cube_init_pos: [0.25, 0.0, 0.015]
+
+
     # ******** Tolerance for the position of the goal
     reach_tolerance: 0.05
 
@@ -245,9 +256,9 @@ rx200: #namespace
     # rationale on each value.
     table_z: -0.005
     safety_z_margin: 0.015
-    safety_z_margin_real: 0.030
+    safety_z_margin_strict: 0.030
     max_joint_delta: 0.5
-    max_joint_delta_real: 0.15
+    max_joint_delta_strict: 0.15
     joint_state_timeout_s: 0.5
     ee_pose_timeout_s: 0.5
 

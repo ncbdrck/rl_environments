@@ -164,9 +164,9 @@ ned2: #namespace
     # by the desk-top height.
     table_z: -0.005
     safety_z_margin: 0.015
-    safety_z_margin_real: 0.030
+    safety_z_margin_strict: 0.030
     max_joint_delta: 0.5
-    max_joint_delta_real: 0.15
+    max_joint_delta_strict: 0.15
     joint_state_timeout_s: 0.5
     ee_pose_timeout_s: 0.5
 

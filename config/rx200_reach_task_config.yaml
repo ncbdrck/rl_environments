@@ -197,12 +197,12 @@ rx200: #namespace
     # pose, not the intermediate joint-space interpolation that may dip
     # lower transiently.
     safety_z_margin: 0.015
-    safety_z_margin_real: 0.030
-    # Per-step cap on |joint_target - current_joint|. Same sim/real
-    # reasoning: real keeps it small so a single rejected-then-clipped
+    safety_z_margin_strict: 0.030
+    # Per-step cap on |joint_target - current_joint|. Same loose/strict
+    # reasoning: strict keeps it small so a single rejected-then-clipped
     # action can't whip the arm across half its envelope.
     max_joint_delta: 0.5
-    max_joint_delta_real: 0.15
+    max_joint_delta_strict: 0.15
     # Sensor freshness thresholds — env loop flags `sensor_timeout` in
     # info_r if any tracked sensor's age exceeds these (real-side
     # safeguard; sim joint_state_controller usually publishes reliably).

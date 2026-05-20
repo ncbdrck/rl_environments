@@ -742,6 +742,44 @@ class RX200ReacherGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         #  we don't need to execute the loop until we reset the env
         if self.init_done:
 
+            # Close-race guard (see reach v3 0712f5a for the diagnosis):
+            # rospy.Timer keeps firing during env.close() while MoveIt
+            # cleanup runs its 1s wait_for_message timeouts. Controllers
+            # get unspawned mid-close → joint_states stops → get_joint_angles
+            # returns []. Next tick's execute_action crashes on the
+            # delta-action broadcast (shape (0,) vs (5,)). Bail out cleanly
+            # if ROS is shutting down or joint state is stale.
+            if rospy.is_shutdown():
+                return
+            jv = getattr(self, "joint_values", None)
+            if jv is None or len(jv) < 5:
+                return
+
+            # Joint-state freshness gate (real-side only — sim has
+            # Gazebo's guaranteed clock). The parent robot env stamps
+            # ``_latest_joint_state_time`` on every /joint_states message;
+            # if no message has arrived within joint_state_timeout_s, the
+            # driver / cable is presumed dead. Stop the arm and skip the
+            # rest of this tick — re-executing the cached action against
+            # frozen state would publish stale targets indefinitely.
+            _js_now = rospy.get_time()
+            _js_last = getattr(self, "_latest_joint_state_time", None)
+            _js_threshold = getattr(self, "joint_state_timeout_s", 0.5)
+            if _js_last is None or (_js_now - _js_last) > _js_threshold:
+                rospy.logwarn_throttle(
+                    2.0,
+                    f"/joint_states stale (last update "
+                    f"{(_js_now - _js_last) if _js_last else 'never'}s ago, "
+                    f"threshold {_js_threshold}s). Stopping arm and "
+                    "skipping env_loop tick — check the interbotix "
+                    "driver + USB cable."
+                )
+                try:
+                    self.move_RX200_object.stop_arm()
+                except Exception:
+                    pass
+                return
+
             if self.debug:
                 if self.log_internal_state:
                     rospy.loginfo(f"Starting RL loop --->: {self.loop_counter}")
@@ -826,10 +864,23 @@ class RX200ReacherGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
                 IK_found, joint_positions = self.calculate_ik(target_pos=action, ee_ori=self.ee_ori)
 
                 if IK_found:
-                    # execute the trajectory - EE
-                    self.movement_result = self.move_arm_joints(q_positions=joint_positions,
-                                                                time_from_start=self.action_speed)
-                    self.within_goal_space = True
+                    # Per-link FK safety: workspace + IK-feasible doesn't
+                    # mean every link stays above the table. Reject before
+                    # publishing to the real driver — on hardware a single
+                    # bad target can ram the arm into the table.
+                    safe, reason = self._check_action_links_safe(
+                        joint_positions, current_joints=self.joint_values
+                    )
+                    if not safe:
+                        if self.log_internal_state:
+                            rospy.logwarn(f"[SAFETY] EE action rejected: {reason}")
+                        self.movement_result = False
+                        self.within_goal_space = False
+                    else:
+                        # execute the trajectory - EE
+                        self.movement_result = self.move_arm_joints(q_positions=joint_positions,
+                                                                    time_from_start=self.action_speed)
+                        self.within_goal_space = True
 
                 else:
                     if self.log_internal_state:
@@ -894,9 +945,22 @@ class RX200ReacherGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
 
             # check if the action is within the workspace
             if self.check_action_within_workspace(action):
-                # execute the trajectory - ros_controllers
-                self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
-                self.within_goal_space = True
+                # Per-link FK safety: see EE branch above. self.joint_values
+                # is refreshed at env_loop tick, so the delta cap can use it.
+                # On hardware this is the last guard before move_arm_joints
+                # publishes to the interbotix driver.
+                safe, reason = self._check_action_links_safe(
+                    action, current_joints=self.joint_values
+                )
+                if not safe:
+                    if self.log_internal_state:
+                        rospy.logwarn(f"[SAFETY] joint action rejected: {reason}")
+                    self.movement_result = False
+                    self.within_goal_space = False
+                else:
+                    # execute the trajectory - ros_controllers
+                    self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
+                    self.within_goal_space = True
 
             else:
                 # print we failed in red colour
@@ -1349,6 +1413,13 @@ class RX200ReacherGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
 
         # Tolerances
         self.reach_tolerance = rospy.get_param('/rx200/reach_tolerance')
+
+        # Real-side env_loop freshness threshold (seconds). If
+        # /joint_states hasn't published within this window, env_loop
+        # stops the arm and bails out of the current tick.
+        self.joint_state_timeout_s = float(
+            rospy.get_param('/rx200/joint_state_timeout_s', 0.5)
+        )
 
         # Variables related to rewards
         self.step_reward = rospy.get_param('/rx200/step_reward')

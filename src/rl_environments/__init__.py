@@ -53,6 +53,16 @@ ALL_REACH_REAL_NAMES = [
     "RX200ReacherGoalReal-v0",
 ]
 
+ALL_PUSH_REAL_NAMES = [
+    "RX200PushReal-v0",
+    "RX200PushGoalReal-v0",
+]
+
+ALL_PNP_REAL_NAMES = [
+    "RX200PnPReal-v0",
+    "RX200PnPGoalReal-v0",
+]
+
 
 # ---------------------------- Simulation Environments  ----------------------------
 
@@ -168,5 +178,38 @@ register(
 register(
     id="RX200ReacherGoalReal-v0",
     entry_point="rl_environments.rx200.real.task_envs.reach.rx200_reach_goal_real:RX200ReacherGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ RX200 Push RealROS Environments ============================
+
+# Real push relies on an externally-published cube pose topic (default
+# /cube_pose, geometry_msgs/PoseStamped). When no message has been
+# received within cube_pose_timeout_s, the env falls back to the YAML
+# cube_init_pos and emits a throttled warning. Wire up any vision
+# pipeline (aruco_ros, deep detector, mocap...) that publishes there.
+register(
+    id="RX200PushReal-v0",
+    entry_point="rl_environments.rx200.real.task_envs.push.rx200_push_real:RX200PushEnv",
+    max_episode_steps=100,
+)
+register(
+    id="RX200PushGoalReal-v0",
+    entry_point="rl_environments.rx200.real.task_envs.push.rx200_push_goal_real:RX200PushGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ RX200 PnP RealROS Environments ============================
+
+register(
+    id="RX200PnPReal-v0",
+    entry_point="rl_environments.rx200.real.task_envs.pnp.rx200_pnp_real:RX200PnPEnv",
+    max_episode_steps=100,
+)
+register(
+    id="RX200PnPGoalReal-v0",
+    entry_point="rl_environments.rx200.real.task_envs.pnp.rx200_pnp_goal_real:RX200PnPGoalEnv",
     max_episode_steps=100,
 )
