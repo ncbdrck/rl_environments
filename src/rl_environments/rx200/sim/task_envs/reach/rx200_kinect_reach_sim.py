@@ -87,18 +87,6 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         # the rospy.Timer below.
         self.realtime_mode = realtime_mode
 
-        ## for debugging let's print all the args
-        print(f"Initializing RX200ReacherEnv with args: launch_gazebo={launch_gazebo}, new_roscore={new_roscore}, "
-                      f"roscore_port={roscore_port}, gazebo_paused={gazebo_paused}, gazebo_gui={gazebo_gui}, "
-                      f"seed={seed}, reward_type={reward_type}, delta_action={delta_action}, delta_coeff={delta_coeff}, "
-                      f"ee_action_type={ee_action_type}, environment_loop_rate={environment_loop_rate}, "
-                      f"action_cycle_time={action_cycle_time}, use_smoothing={use_smoothing}, rgb_obs_only={rgb_obs_only}, "
-                      f"normal_obs_only={normal_obs_only}, rgb_plus_normal_obs={rgb_plus_normal_obs}, "
-                      f"rgb_plus_depth_plus_normal_obs={rgb_plus_depth_plus_normal_obs}, load_table={load_table}, "
-                      f"debug={debug}, action_speed={action_speed}, simple_dense_reward={simple_dense_reward}, "
-                      f"log_internal_state={log_internal_state}, extra_smoothing={extra_smoothing}, "
-                      f"realtime_mode={realtime_mode}")
-
         """
         variables to keep track of ros, gazebo ports and gazebo pid
         """
@@ -119,11 +107,9 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
         # launch gazebo
         if launch_gazebo:
 
-            print("Launching Gazebo...")
             # Update the function to include additional options.
             ros_port, gazebo_port, gazebo_pid = self._launch_gazebo(launch_roscore=new_roscore, port=roscore_port,
                                                                     paused=gazebo_paused, gui=gazebo_gui)
-            print("Gazebo launched with ROS Port" + str(ros_port) + "and Gazebo PID" + str(gazebo_pid))
 
         # Launch new roscore
         elif new_roscore:
@@ -131,8 +117,6 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
 
         # ros_port of the already running roscore
         elif roscore_port is not None:
-
-            print("Connecting to existing roscore on port " + str(roscore_port) + "...")
             ros_port = roscore_port
 
             # change to new rosmaster
@@ -148,8 +132,6 @@ class RX200ReacherEnv(rx200_robot_sim.RX200RobotEnv):
                                                                               port=roscore_port,
                                                                               paused=gazebo_paused,
                                                                               gui=gazebo_gui)
-            else:
-                print("Gazebo launched!")
 
         # init the ros node
         if ros_port is not None:
