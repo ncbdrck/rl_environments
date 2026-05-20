@@ -57,6 +57,9 @@ ALL_PNP_SIM_NAMES = [
 ALL_REACH_REAL_NAMES = [
     "RX200ReacherReal-v0",
     "RX200ReacherGoalReal-v0",
+    # Ned2 reach real.
+    "NED2ReacherReal-v0",
+    "NED2ReacherGoalReal-v0",
 ]
 
 ALL_PUSH_REAL_NAMES = [
@@ -245,5 +248,22 @@ register(
 register(
     id="RX200PnPGoalReal-v0",
     entry_point="rl_environments.rx200.real.task_envs.pnp.rx200_pnp_goal_real:RX200PnPGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ Ned2 Reacher RealROS Environments ============================
+
+# Per-link FK safety + joint-state staleness gate wired in; mirrors the
+# RX200 reach real envs. Push + PnP real for NED2 are queued for follow-up
+# sessions (task env files are currently 0-byte stubs).
+register(
+    id="NED2ReacherReal-v0",
+    entry_point="rl_environments.ned2.real.task_envs.reach.ned2_reach_real:NED2ReacherEnv",
+    max_episode_steps=100,
+)
+register(
+    id="NED2ReacherGoalReal-v0",
+    entry_point="rl_environments.ned2.real.task_envs.reach.ned2_reach_goal_real:NED2ReacherGoalEnv",
     max_episode_steps=100,
 )

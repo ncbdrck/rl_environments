@@ -187,6 +187,36 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
                                                          base_link=self.ref_frame,
                                                          end_link=self.ee_link)
 
+        # Strict-safety flag — picked up by _check_action_links_safe to
+        # use the tighter margins (safety_z_margin_strict,
+        # max_joint_delta_strict). Defaults True on the real robot env.
+        self.enable_strict_safety = True
+
+        # Joint-state freshness tracker. The joint_state_callback below
+        # stamps ``_latest_joint_state_time`` on every /joint_states
+        # message; task-env env_loops gate on
+        # ``now - _latest_joint_state_time > joint_state_timeout_s`` to
+        # skip executing actions against a frozen stale state when the
+        # driver / cable goes down.
+        self._latest_joint_state_time = None
+
+        # Per-link FK chains for the safety check. KDLKinematics needs
+        # one solver per subchain (base_link → that link). tool_link is
+        # only present when the gripper URDF is loaded; the try/except
+        # below logs and skips if a link isn't on the parameter server.
+        # See RX200RobotEnv (d8b5517) for the full design rationale.
+        self._safety_kin = {}
+        for _link in self.SAFETY_CHECK_LINKS:
+            rospy.loginfo(f"[SAFETY] building kinematics for {_link} ...")
+            try:
+                _kin = KDLKinematics(urdf=self.pykdl_robot,
+                                     base_link=self.ref_frame,
+                                     end_link=_link)
+                self._safety_kin[_link] = (_kin, int(_kin.num_joints))
+                rospy.loginfo(f"[SAFETY] {_link} ok ({_kin.num_joints} joints)")
+            except Exception as _e:
+                rospy.logwarn(f"[SAFETY] kinematics setup failed for {_link}: {_e}")
+
         """
         Finished __init__ method
         """
@@ -282,10 +312,14 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
     def joint_state_callback(self, joint_state):
         """
         Function to get the joint state of the robot.
+
+        Also stamps ``_latest_joint_state_time`` so task envs can
+        detect driver / cable disconnects via env_loop freshness gates.
         """
 
         if joint_state is not None:
             self.joint_state = joint_state
+            self._latest_joint_state_time = rospy.get_time()
 
             # joint names - not using this
             self.joint_state_names = list(joint_state.name)
@@ -547,6 +581,80 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
         rospy.logdebug(rostopic.get_topic_type("/zed2/left/image_rect_color", blocking=True))
 
         return True
+
+    # ---------------------------------------------------
+    #   Per-link FK safety (mirrors RX200RobotEnv.d8b5517 for Ned2 real)
+
+    # Arm links whose world z must stay above the table/ground for the
+    # action to be safe. Order matches URDF chain shoulder→tool.
+    # tool_link only exists if the gripper URDF is loaded (PnP runs);
+    # missing links are skipped at build time with a warning.
+    SAFETY_CHECK_LINKS = (
+        "shoulder_link",
+        "arm_link",
+        "elbow_link",
+        "forearm_link",
+        "wrist_link",
+        "tool_link",
+    )
+
+    def _check_action_links_safe(self, joint_targets, current_joints=None):
+        """Predict each arm link's world z under ``joint_targets`` and reject
+        the action if any link would dip below ``table_z + safety_z_margin``.
+        Also caps |target - current| per joint at ``max_joint_delta``.
+
+        When ``self.enable_strict_safety`` is True (default on the real
+        robot env) the tighter margins are used:
+          safety_z_margin_strict (default 0.030)
+          max_joint_delta_strict (default 0.15)
+
+        Returns
+        -------
+        (safe, reason) : (bool, Optional[str])
+        """
+        strict = bool(getattr(self, "enable_strict_safety", False))
+        table_z = float(rospy.get_param("/ned2/table_z", -0.005))
+        if strict:
+            margin = float(rospy.get_param("/ned2/safety_z_margin_strict", 0.030))
+            max_delta = float(rospy.get_param("/ned2/max_joint_delta_strict", 0.15))
+        else:
+            margin = float(rospy.get_param("/ned2/safety_z_margin", 0.015))
+            max_delta = float(rospy.get_param("/ned2/max_joint_delta", 0.5))
+        floor = table_z + margin
+
+        q = np.asarray(joint_targets, dtype=np.float64)
+
+        # Per-joint delta cap (skipped when current pose is unknown).
+        if current_joints is not None:
+            cur = np.asarray(current_joints, dtype=np.float64)
+            if cur.shape == q.shape:
+                deltas = np.abs(q - cur)
+                if np.any(deltas > max_delta):
+                    idx = int(np.argmax(deltas))
+                    return False, f"joint[{idx}] delta {deltas[idx]:.3f} > {max_delta}"
+
+        # Per-link z check via cached pykdl subchains.
+        per_link_z = []
+        for link, (kin, n) in self._safety_kin.items():
+            try:
+                pose = kin.forward(q[:n])
+            except Exception as e:
+                return False, f"FK failed for {link}: {e}"
+            z = float(pose[2, 3])
+            per_link_z.append((link, z))
+            if z < floor:
+                return False, f"{link} predicted z={z:.3f} < floor={floor:.3f}"
+
+        # First-3-calls debug log so the floor + per-link z values are
+        # visible at startup. Then goes quiet to avoid log spam.
+        if not hasattr(self, "_safety_log_count"):
+            self._safety_log_count = 0
+        if self._safety_log_count < 3:
+            self._safety_log_count += 1
+            zs = ", ".join(f"{l.rsplit('/', 1)[-1]}={z:.3f}" for l, z in per_link_z)
+            rospy.loginfo(f"[SAFETY] call #{self._safety_log_count}: floor={floor:.3f}, {zs}")
+
+        return True, None
 
     # ---------------------------------------------------
     #   Methods to override in the Robot Environment
