@@ -1,0 +1,227 @@
+ned2: #namespace
+
+    # ******** Task Related parameters (not currently used)
+    max_steps: 1000
+
+    # ******** Action Space
+    # Define the minimum and maximum joint values (6 joints — NED2 has
+    # no gripper in the push task; the gripper kwarg on the robot env
+    # is left off).
+    min_joint_pos:
+      - -2.949  # joint_1 (waist)
+      - -2.09   # joint_2 (shoulder)
+      - -1.34   # joint_3 (elbow)
+      - -2.089  # joint_4 (wrist1)
+      - -1.919  # joint_5 (wrist2)
+      - -2.53   # joint_6 (wrist3)
+
+    max_joint_pos:
+      - 2.949
+      - 0.61
+      - 1.57
+      - 2.089
+      - 1.922
+      - 2.53
+
+
+    # ******** Observation Space
+
+    position_ee_max: # Maximum XYZ position for the EE (NED2 reach ~44cm)
+      x: 0.44
+      y: 0.44
+      z: 0.44
+    position_ee_min: # Minimum XYZ position for the EE
+      x: -0.44
+      y: -0.44
+      z: -0.0   # Loose obs floor; actual floor is workspace_min.z + FK safety.
+
+    rpy_ee_max:
+      r: 6.2832
+      p: 6.2832
+      y: 6.2832
+    rpy_ee_min:
+      r: -6.2832
+      p: -6.2832
+      y: -6.2832
+
+    position_cube_max: # Cube can be anywhere reachable
+      x: 0.44
+      y: 0.44
+      z: 0.44
+    position_cube_min:
+      x: -0.44
+      y: -0.44
+      z: 0.00   # cube sits on table; cannot go below
+
+    rpy_cube_max:
+      r: 6.28
+      p: 6.28
+      y: 6.28
+    rpy_cube_min:
+      r: -6.28
+      p: -6.28
+      y: -6.28
+
+    # Cube velocities — same physics-derived bounds as RX200 push
+    # (finite-differenced from cube pose; ±2 m/s gives slack for sim
+    # transients while a pushed cube typically slides at < 1 m/s).
+    linear_velocity_cube_max:
+      x: 2.0
+      y: 2.0
+      z: 2.0
+    linear_velocity_cube_min:
+      x: -2.0
+      y: -2.0
+      z: -2.0
+
+    angular_velocity_cube_max:
+      r: 20.0
+      p: 20.0
+      y: 20.0
+    angular_velocity_cube_min:
+      r: -20.0
+      p: -20.0
+      y: -20.0
+
+    # Cube position relative to the EE (cube_pos - ee_pos). NED2's
+    # 44 cm reach × 2 → ±0.88 m bounds.
+    cube_rel_to_ee_max:
+      x: 0.88
+      y: 0.88
+      z: 0.88
+    cube_rel_to_ee_min:
+      x: -0.88
+      y: -0.88
+      z: -0.88
+
+    # Not used in push task — kept for shape consistency with reach.
+    linear_distance_max:
+      x: 1.00
+      y: 1.00
+      z: 0.50
+    linear_distance_min:
+      x: -1.00
+      y: -1.00
+      z: -0.50
+
+    max_distance: 0.44 # max cube-to-goal distance = robot reach
+
+    # No gripper in this task — 6 joints only.
+    min_joint_angles:
+      - -2.949
+      - -2.09
+      - -1.34
+      - -2.089
+      - -1.919
+      - -2.53
+
+    max_joint_angles:
+      - 2.949
+      - 0.61
+      - 1.57
+      - 2.089
+      - 1.922
+      - 2.53
+
+    min_joint_vel:
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+
+    max_joint_vel:
+      - 0.785
+      - 0.5235
+      - 0.785
+      - 1.57
+      - 1.57
+      - 1.775
+
+    # ******** goal space — cube target on table
+    # NED2's workspace_1 pad sits roughly in front of the base at
+    # x ≈ 0.20. Push goal is within reachable + on-table.
+    position_goal_max:
+      x: 0.30
+      y: 0.10
+      z: 0.025  # cube half-height — z is set explicitly in the script
+    position_goal_min:
+      x: 0.15
+      y: -0.10
+      z: 0.015
+
+    # ******** Workspace - restrict arm to reach + avoid table/self
+    workspace_max:
+      x: 0.44
+      y: 0.44
+      z: 0.44
+    workspace_min: # EE floor (per-link FK enforces, not just this)
+      x: 0.10
+      y: -0.44
+      z: 0.04   # EE floor for push: enough clearance over the 2 cm cube
+                # on the table without scraping the gripper tip.
+
+
+    # ******** achieved_goal and desired_goal
+    # Push semantics: achieved_goal tracks the CUBE pose, not the EE.
+    # The cube sits on the table at z ≈ 0.015 (half of its 0.02 m edge
+    # above the table surface), so achieved/desired z floors are
+    # intentionally below workspace_min.z (which constrains the arm).
+    position_achieved_goal_max:
+      x: 0.44
+      y: 0.44
+      z: 0.44
+    position_achieved_goal_min:
+      x: -0.44
+      y: -0.44
+      z: 0.005  # half a cube-edge above the table
+
+    position_desired_goal_max:
+      x: 0.30
+      y: 0.30
+      z: 0.30
+    position_desired_goal_min:
+      x: 0.15
+      y: -0.30
+      z: 0.005
+
+
+    # ******** Gazebo simulation parameters
+    gazebo_time_step: 0.001
+    gazebo_update_rate_multiplier: 1.0
+
+
+    # ******** Real-side cube tracking (consumed by NED2 real push envs
+    # when those are wired). Real envs subscribe to a vision pipeline
+    # publishing geometry_msgs/PoseStamped on ``cube_pose_topic``.
+    # If no message arrives within cube_pose_timeout_s, the env falls
+    # back to ``cube_init_pos`` and emits a throttled warning.
+    cube_pose_timeout_s: 1.0
+    cube_init_pos: [0.20, 0.0, 0.015]
+
+
+    # ******** Tolerance for the position of the goal
+    reach_tolerance: 0.05
+
+
+    # ******** Variables related to rewards
+    step_reward: -0.5
+    multiplier_dist_reward: 2.0
+    reached_goal_reward: 20
+    joint_limits_reward: -2.0
+    none_exe_reward: -5.0
+    not_within_goal_space_reward: -2.0
+
+
+    # ******** Safety (consumed by Ned2RobotEnv per-link FK check)
+    # Same defaults as ned2_reach_task_config.yaml. Ned2 mounts at
+    # world z=0 (no desk spawned by the robot env), so table_z here
+    # represents the ground / workspace_1 pad.
+    table_z: -0.005
+    safety_z_margin: 0.015
+    safety_z_margin_strict: 0.030
+    max_joint_delta: 0.5
+    max_joint_delta_strict: 0.15
+    joint_state_timeout_s: 0.5
+    ee_pose_timeout_s: 0.5

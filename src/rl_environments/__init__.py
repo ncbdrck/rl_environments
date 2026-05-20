@@ -39,6 +39,9 @@ ALL_PUSH_SIM_NAMES = [
     "RX200PushGoalSim-v0",
     "RX200Zed2PushSim-v0",
     "RX200Zed2PushGoalSim-v0",
+    # Ned2 push.
+    "NED2PushSim-v0",
+    "NED2PushGoalSim-v0",
 ]
 
 ALL_PNP_SIM_NAMES = [
@@ -163,6 +166,20 @@ register(
 register(
     id="NED2ReacherGoalSim-v0",
     entry_point="rl_environments.ned2.sim.task_envs.reach.ned2_reach_goal_sim:NED2ReacherGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ Ned2 Push Multiros Environments ============================
+
+register(
+    id="NED2PushSim-v0",
+    entry_point="rl_environments.ned2.sim.task_envs.push.ned2_push_sim:NED2PushEnv",
+    max_episode_steps=100,
+)
+register(
+    id="NED2PushGoalSim-v0",
+    entry_point="rl_environments.ned2.sim.task_envs.push.ned2_push_goal_sim:NED2PushGoalEnv",
     max_episode_steps=100,
 )
 
