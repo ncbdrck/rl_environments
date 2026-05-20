@@ -65,11 +65,17 @@ ALL_REACH_REAL_NAMES = [
 ALL_PUSH_REAL_NAMES = [
     "RX200PushReal-v0",
     "RX200PushGoalReal-v0",
+    # Ned2 push real.
+    "NED2PushReal-v0",
+    "NED2PushGoalReal-v0",
 ]
 
 ALL_PNP_REAL_NAMES = [
     "RX200PnPReal-v0",
     "RX200PnPGoalReal-v0",
+    # Ned2 PnP real.
+    "NED2PnPReal-v0",
+    "NED2PnPGoalReal-v0",
 ]
 
 
@@ -265,5 +271,43 @@ register(
 register(
     id="NED2ReacherGoalReal-v0",
     entry_point="rl_environments.ned2.real.task_envs.reach.ned2_reach_goal_real:NED2ReacherGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ Ned2 Push RealROS Environments ============================
+
+# Real push: cube pose comes from an externally-published /cube_pose
+# topic (geometry_msgs/PoseStamped). Fall back to YAML cube_init_pos +
+# throttled warning when stale. Opt-in: pass auto_launch_cube_tracker=True
+# (or --cube-tracker auto on the CLI) for one-shot rl_envs_cube_tracker
+# launch under the managed-process registry.
+register(
+    id="NED2PushReal-v0",
+    entry_point="rl_environments.ned2.real.task_envs.push.ned2_push_real:NED2PushEnv",
+    max_episode_steps=100,
+)
+register(
+    id="NED2PushGoalReal-v0",
+    entry_point="rl_environments.ned2.real.task_envs.push.ned2_push_goal_real:NED2PushGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ Ned2 PnP RealROS Environments ============================
+
+# Real PnP: same cube tracking contract as push. Gripper command is
+# binary "open"/"close" via niryo_robot_tools_commander (the scalar
+# action is midpoint-discretized inside the env). The mors joints are
+# prismatic in metres — see ned2_pnp_task_config.yaml for the
+# grasp_finger_thresh (in metres) used to derive is_grasped.
+register(
+    id="NED2PnPReal-v0",
+    entry_point="rl_environments.ned2.real.task_envs.pnp.ned2_pnp_real:NED2PnPEnv",
+    max_episode_steps=100,
+)
+register(
+    id="NED2PnPGoalReal-v0",
+    entry_point="rl_environments.ned2.real.task_envs.pnp.ned2_pnp_goal_real:NED2PnPGoalEnv",
     max_episode_steps=100,
 )
