@@ -2,10 +2,9 @@ ned2: #namespace
 
     # ******** Action Space
     # Define the minimum and maximum joint values with the gripper open.
-    # Values match URDF (niryo_ned2_param.urdf.xacro) limits in radians;
-    # MoveIt joint_limits.yaml additionally constrains max velocities to
-    # 1.57 / 1.047 / 1.57 / 3.14 / 3.14 / 3.14 rad/s — the max_joint_vel
-    # block below uses ~50% of these as a conservative safety margin.
+    # Values match URDF (niryo_ned2_param.urdf.xacro) limits in radians.
+    # max_joint_vel uses Niryo's official values (stepper v_max for j1-3
+    # from joints_interface docs; MoveIt joint_limits.yaml for j4-6).
     min_joint_pos:
       - -2.949
       - -1.833  # joint_2 (URDF: -105° = -1.833 rad — was -2.09, past URDF limit)
@@ -84,13 +83,16 @@ ned2: #namespace
       - 0.0
 
     # No gripper in this task, otherwise we would have 8 values for the gripper
+    # Per Niryo's joints_interface docs (stepper v_max for joints 1-3) and
+    # MoveIt joint_limits.yaml (joints 4-6). Same values Niryo uses for
+    # their own sim.
     max_joint_vel:
-      - 0.785
-      - 0.5235
-      - 0.785
-      - 1.57
-      - 1.57
-      - 1.775
+      - 1.57    # joint_1 (stepper, v_max 1.571 rad/s)
+      - 1.047   # joint_2 (stepper, v_max 1.047 rad/s)
+      - 1.57    # joint_3 (stepper, v_max 1.571 rad/s)
+      - 3.14    # joint_4 (dynamixel, MoveIt cap)
+      - 3.14    # joint_5 (dynamixel, MoveIt cap)
+      - 3.14    # joint_6 (dynamixel, MoveIt cap)
 
     # ******** goal space
     position_goal_max: # Maximum XYZ position for the goal

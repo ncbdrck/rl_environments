@@ -131,13 +131,14 @@ ned2: #namespace
       - 0.0
       - 0.0
 
+    # From Niryo joints_interface docs + MoveIt joint_limits.yaml.
     max_joint_vel:
-      - 0.785
-      - 0.5235
-      - 0.785
-      - 1.57
-      - 1.57
-      - 1.775
+      - 1.57    # joint_1 (stepper v_max)
+      - 1.047   # joint_2 (stepper v_max)
+      - 1.57    # joint_3 (stepper v_max)
+      - 3.14    # joint_4 (dynamixel MoveIt cap)
+      - 3.14    # joint_5 (dynamixel MoveIt cap)
+      - 3.14    # joint_6 (dynamixel MoveIt cap)
 
     # ******** goal space — cube target on table
     # NED2's workspace_1 pad sits roughly in front of the base at
@@ -198,7 +199,11 @@ ned2: #namespace
     # If no message arrives within cube_pose_timeout_s, the env falls
     # back to ``cube_init_pos`` and emits a throttled warning.
     cube_pose_timeout_s: 1.0
-    cube_init_pos: [0.20, 0.0, 0.015]
+    cube_init_pos: [0.25, 0.0, 0.015]   # aligned with RX200 (both robots
+                                        # sit on the same desk and have
+                                        # comparable reach; 0.25 m sits
+                                        # comfortably inside Ned2's 490 mm
+                                        # reach envelope).
 
 
     # ******** Tolerance for the position of the goal

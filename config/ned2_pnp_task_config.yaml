@@ -168,15 +168,17 @@ ned2: #namespace
       - 0.0
       - 0.0
 
+    # Arm: Niryo joints_interface docs + MoveIt joint_limits.yaml.
+    # Mors: URDF velocity="5" (prismatic, m/s).
     max_joint_vel:
-      - 0.785
-      - 0.5235
-      - 0.785
-      - 1.57
-      - 1.57
-      - 1.775
-      - 5.0    # mors_1 (m/s, URDF)
-      - 5.0    # mors_2 (m/s, URDF)
+      - 1.57    # joint_1 (stepper v_max)
+      - 1.047   # joint_2 (stepper v_max)
+      - 1.57    # joint_3 (stepper v_max)
+      - 3.14    # joint_4 (dynamixel MoveIt cap)
+      - 3.14    # joint_5 (dynamixel MoveIt cap)
+      - 3.14    # joint_6 (dynamixel MoveIt cap)
+      - 5.0     # mors_1 (m/s, URDF)
+      - 5.0     # mors_2 (m/s, URDF)
 
 
     # ******** goal space — PnP releases the table-z constraint
@@ -230,7 +232,7 @@ ned2: #namespace
     # when those are wired). Same contract as push: subscribe to
     # cube_pose_topic, fall back to cube_init_pos after timeout.
     cube_pose_timeout_s: 1.0
-    cube_init_pos: [0.20, 0.0, 0.015]
+    cube_init_pos: [0.25, 0.0, 0.015]   # aligned with RX200 — same desk.
 
 
     # ******** Tolerance for the position of the goal

@@ -12,7 +12,7 @@ from sensor_msgs.msg import JointState, PointCloud2, Image
 from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from niryo_robot_tools_commander.msg import ToolAction, ToolGoal, ToolCommand
+from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryGoal
 import actionlib
 
 from cv_bridge import CvBridge
@@ -662,34 +662,56 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         return True
 
+    # Mors prismatic limits (URDF: ±0.01 m). Used to construct the
+    # "fully open" / "fully closed" trajectory points for sim, where
+    # we drive gazebo_tool_commander directly instead of routing
+    # through Niryo's tool_commander_node (which we don't launch in
+    # sim — keeps the bring-up to gazebo + ros_control only).
+    _MORS_OPEN_POS = 0.01
+    _MORS_CLOSED_POS = -0.01
+    _MORS_MOVE_SECS = 1.0  # time_from_start for the trajectory point
+
     def move_gripper_joints(self, action: str) -> bool:
         """
-        Set a joint position target only for the gripper joints using low-level ros controllers. - ros action server
+        Drive the gripper to "open" or "close" (binary, same API the
+        real env exposes via niryo_robot_tools_commander).
+
+        Sim path: publish a JointTrajectory to
+        ``/gazebo_tool_commander/follow_joint_trajectory`` (the
+        effort-based controller our description-extras package brings
+        up). Niryo's tool_commander_node isn't running in sim, so we
+        bypass it and command the mors joints directly. The action
+        server contract is identical to what the real env's
+        tool_commander → effort controller would resolve to internally.
 
         Args:
-            action: "open" or "close" the gripper
+            action: "open" or "close".
 
         Returns:
-            True if the action is successful
+            True if the action server returned a result (success or
+            otherwise — the env treats "trajectory dispatched" as the
+            success condition, matching the real-side semantics).
         """
+        target = self._MORS_OPEN_POS if action == "open" else self._MORS_CLOSED_POS
 
-        # for the gripper
-        gripper_action_client = actionlib.SimpleActionClient('/ned2/niryo_robot_tools_commander/action_server',
-                                                                  ToolAction)
+        client = actionlib.SimpleActionClient(
+            '/gazebo_tool_commander/follow_joint_trajectory',
+            FollowJointTrajectoryAction,
+        )
+        client.wait_for_server()
 
-        # wait for the action server to start
-        gripper_action_client.wait_for_server()
+        goal = FollowJointTrajectoryGoal()
+        goal.trajectory = JointTrajectory()
+        goal.trajectory.joint_names = list(self.gripper_joint_names)
+        point = JointTrajectoryPoint()
+        point.positions = [target, target]
+        point.velocities = [0.0, 0.0]
+        point.accelerations = [0.0, 0.0]
+        point.time_from_start = rospy.Duration(self._MORS_MOVE_SECS)
+        goal.trajectory.points.append(point)
 
-        # create a ToolGoal object
-        tool_goal = ToolGoal()
-        tool_goal.cmd.tool_id = 11  # gripper tool id (normal gripper)
-        tool_goal.cmd.cmd_type = ToolCommand.OPEN_GRIPPER if action == "open" else ToolCommand.CLOSE_GRIPPER
-
-        # send the goal to the action server
-        gripper_action_client.send_goal(tool_goal)
-        # wait for the action to complete
-        gripper_action_client.wait_for_result()
-
+        client.send_goal(goal)
+        client.wait_for_result()
         return True
 
     def smooth_trajectory(self, q_positions, time_from_start, multiplier=100):

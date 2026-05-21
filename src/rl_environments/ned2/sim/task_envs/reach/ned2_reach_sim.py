@@ -69,7 +69,7 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
     def __init__(self, launch_gazebo: bool = True, new_roscore: bool = True, roscore_port: str = None,
                  gazebo_paused: bool = False, gazebo_gui: bool = False, seed: int = None, reward_type: str = "Dense",
                  delta_action: bool = True, delta_coeff: float = 0.05, ee_action_type: bool = False,
-                 environment_loop_rate: float = 10, action_cycle_time: float = 0.100,
+                 environment_loop_rate: float = 25, action_cycle_time: float = 0.100,
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
                  load_table: bool = True, debug: bool = False, action_speed: float = 0.5,

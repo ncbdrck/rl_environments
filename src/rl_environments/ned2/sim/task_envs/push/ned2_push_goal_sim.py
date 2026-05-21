@@ -93,7 +93,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
     def __init__(self, launch_gazebo: bool = True, new_roscore: bool = True, roscore_port: str = None,
                  gazebo_paused: bool = False, gazebo_gui: bool = False, seed: int = None, reward_type: str = "Dense",
                  delta_action: bool = True, delta_coeff: float = 0.05, ee_action_type: bool = False,
-                 environment_loop_rate: float = 10, action_cycle_time: float = 0.100,
+                 environment_loop_rate: float = 25, action_cycle_time: float = 0.100,
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
                  load_table: bool = True, debug: bool = False, action_speed: float = 0.5,
@@ -634,7 +634,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         else:
             # Static cube position - hard code one
             # TODO: confirm NED2 push static cube spawn pose
-            cube_init_vector = np.array([0.180, 0.000, 0.015], dtype=np.float32)
+            cube_init_vector = np.array([0.25, 0.00, 0.015], dtype=np.float32)
 
         # spawn the cube. The NED2 robot env signature is
         # spawn_cube_in_gazebo(model_pos_x, model_pos_y) — it picks z
