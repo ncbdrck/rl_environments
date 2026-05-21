@@ -224,6 +224,20 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         """
         clean_logs = False
 
+        # Pre-load controllers YAML (with PID gains) under /ned2 BEFORE
+        # gazebo spawns the model. The gazebo_ros_control plugin reads
+        # /ned2/gazebo_ros_control/pid_gains/joint_* at plugin-init time
+        # (when the model is spawned). multiros's spawn_robot_in_gazebo
+        # loads the controllers YAML AFTER spawn, which is too late —
+        # the plugin has already given up and logged "No p gain
+        # specified for pid". Without PIDs the arm sags under gravity
+        # and MoveIt can't converge.
+        ros_common.ros_load_yaml(
+            pkg_name=controller_package_name,
+            file_name=controllers_file,
+            ns="/" + namespace.lstrip("/"),
+        )
+
         """
         Init MyRobotGoalEnv.
         """
@@ -255,18 +269,21 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         self.joint_state = JointState()
 
         # ---------- Moveit
-        if not gripper:
-            ros_common.ros_launch_launcher(pkg_name="niryo_moveit_config_standalone",
-                                           launch_file_name="move_group.launch",
-                                           args=["hardware_version:=ned2", "simulation_mode:=true",
-                                                 "load_robot_description:=false"
-                                                 ])
-        else:
-            ros_common.ros_launch_launcher(pkg_name="niryo_moveit_config_w_gripper1",
-                                           launch_file_name="move_group.launch",
-                                           args=["hardware_version:=ned2", "simulation_mode:=true",
-                                                 "load_robot_description:=false"
-                                                 ])
+        # Use the description-extras wrapper, which includes Niryo's
+        # move_group.launch under <group ns="ned2"> so move_group ends
+        # up at /ned2/move_group/... and MoveitMultiros(ns="ned2") can
+        # find its action servers. Without the wrap, Niryo's launch
+        # runs at root and the env hangs on the readiness check.
+        ros_common.ros_launch_launcher(
+            pkg_name="niryo_ned2_description_extras",
+            launch_file_name="ned2_move_group.launch",
+            args=[
+                "hardware_version:=ned2",
+                "simulation_mode:=true",
+                "load_robot_description:=false",
+                f"gripper:={'true' if gripper else 'false'}",
+            ],
+        )
 
         # ---------- kinect
         self.use_camera = use_camera
@@ -421,7 +438,7 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         # spawn a cube
         done = gazebo_models.spawn_sdf_model_gazebo(pkg_name="reactorx200_description", file_name="block.sdf",
                                                     model_folder="/models/block",
-                                                    model_name="red_cube", namespace="/rx200",
+                                                    model_name="red_cube", namespace="/ned2",
                                                     pos_x=model_pos_x,
                                                     pos_y=model_pos_y,
                                                     pos_z=model_pos_z)
