@@ -85,10 +85,12 @@ to subscribe. Decoded frame is exposed as `self.cv_image_wrist`.
    template; tune for the NED2 workspace_1 pad position. Search for
    `# TODO: confirm NED2 {push,pnp} static goal pose`.
 
-2. **Cube spawn position mismatch** — `cube_init_vector = np.array([0.180,
-   0.000, 0.015])` hard-coded in NED2 sim push (both std + goal). YAMLs
-   say `cube_init_pos: [0.20, 0.0, 0.015]`. The hard-coded value is the
-   fallback; tune both consistently.
+2. **Cube spawn position (sim push) — hard-coded vs YAML** —
+   `cube_init_vector = np.array([0.180, 0.000, 0.015])` hard-coded in
+   NED2 sim push (both std + goal). The matching sim YAMLs use
+   `cube_init_pos: [0.25, 0.0, 0.015]`. Real-side fallback already
+   aligned to YAML; tune the sim hard-coded value if you want them to
+   match.
 
 3. **`grasp_finger_thresh = 0.0` (metres)** in `ned2_pnp_task_config.yaml`.
    Position-ceiling for treating `joint_base_to_mors_1` as "closed on
