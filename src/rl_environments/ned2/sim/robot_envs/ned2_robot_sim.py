@@ -382,7 +382,7 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         * set_trajectory_ee: Set a pose target for the end effector of the robot arm.
         * get_ee_pose: Get end-effector pose a geometry_msgs/PoseStamped message
         * get_ee_rpy: Get end-effector orientation as a list of roll, pitch, and yaw angles.
-        * get_joint_angles: Get current joint angles of the robot arm - 5 elements
+        * get_joint_angles: Get current joint angles of the robot arm - 6 elements
         * check_goal: Check if the goal is reachable
         * check_goal_reachable_joint_pos: Check if the goal is reachable with joint positions
         * kinect_depth_callback: Callback function for kinect depth sensor
@@ -773,7 +773,7 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
     def get_joint_angles(self):
         """
-        get current joint angles of the robot arm - 5 elements
+        get current joint angles of the robot arm - 6 elements
         Returns a list
         """
         return self.move_NED2_object.get_joint_angles_robot_arm()

@@ -440,7 +440,9 @@ class NED2ReacherGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
             if self.ee_action_type:
                 self.action_vector = np.zeros(3, dtype=np.float32)
             else:
-                self.action_vector = np.zeros(5, dtype=np.float32)
+                # 6 arm joints on NED2 — was np.zeros(5) (RX200-ism)
+                # which caused a shape mismatch when use_smoothing=True.
+                self.action_vector = np.zeros(6, dtype=np.float32)
 
         # we can use this to set a time for ros_controllers to complete the action
         self.environment_loop_time = 1.0 / environment_loop_rate  # in seconds
