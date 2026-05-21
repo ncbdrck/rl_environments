@@ -133,9 +133,10 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         robot_ori_y = 0.0
         robot_ori_z = 0.0
 
-        # controller (must be inside above pkg_name/config/)
-        controller_package_name = "rl_environments"
-        controllers_file = "ned2_ros_controllers.yaml"
+        # Controllers config — see ned2_robot_sim.py for the full rationale.
+        # Single source of truth lives in niryo_ned2_description_extras.
+        controller_package_name = "niryo_ned2_description_extras"
+        controllers_file = "ned2_controllers.yaml" if not gripper else "ned2_controllers_w_gripper.yaml"
         controllers_list = ["joint_state_controller", "niryo_robot_follow_joint_trajectory_controller"] if not gripper else \
             ["joint_state_controller", "niryo_robot_follow_joint_trajectory_controller", "gazebo_tool_commander"]
 

@@ -140,9 +140,13 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         robot_ori_y = 0.0
         robot_ori_z = 0.0
 
-        # controller (must be inside above pkg_name/config/)
-        controller_package_name = "rl_environments"
-        controllers_file = "ned2_ros_controllers.yaml"
+        # Controllers config — loaded from niryo_ned2_description_extras
+        # (single source of truth for both standalone roslaunch testing
+        # and RL env runtime). Two variants:
+        #   ned2_controllers.yaml            → joint_state + arm trajectory
+        #   ned2_controllers_w_gripper.yaml  → + gazebo_tool_commander + mors PID
+        controller_package_name = "niryo_ned2_description_extras"
+        controllers_file = "ned2_controllers.yaml" if not gripper else "ned2_controllers_w_gripper.yaml"
         controllers_list = ["joint_state_controller", "niryo_robot_follow_joint_trajectory_controller"] if not gripper else \
             ["joint_state_controller", "niryo_robot_follow_joint_trajectory_controller", "gazebo_tool_commander"]
 
