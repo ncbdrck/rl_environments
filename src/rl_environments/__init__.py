@@ -261,8 +261,8 @@ register(
 # ============================ Ned2 Reacher RealROS Environments ============================
 
 # Per-link FK safety + joint-state staleness gate wired in; mirrors the
-# RX200 reach real envs. Push + PnP real for NED2 are queued for follow-up
-# sessions (task env files are currently 0-byte stubs).
+# RX200 reach real envs. Push + PnP real for NED2 are now implemented
+# (registrations below) — pending live hardware verification.
 register(
     id="NED2ReacherReal-v0",
     entry_point="rl_environments.ned2.real.task_envs.reach.ned2_reach_real:NED2ReacherEnv",

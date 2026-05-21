@@ -220,7 +220,7 @@ if __name__ == '__main__':
     # ros_common.clean_ros_logs()
 
     # --- normal environments
-    env = gym.make('RX200ReacherSim-v2', gazebo_gui=True, ee_action_type=False, seed=10,
+    env = gym.make('RX200ReacherSim-v0', gazebo_gui=True, ee_action_type=False, seed=10,
                    delta_action=True, environment_loop_rate=10.0, action_cycle_time=0.500,
                    use_smoothing=False, action_speed=0.100, reward_type="dense", log_internal_state=False)
 
