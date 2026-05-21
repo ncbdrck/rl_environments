@@ -190,7 +190,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_real.NED2RobotGoalEnv):
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
                  debug: bool = False, action_speed: float = 0.5,
                  simple_dense_reward: bool = True, log_internal_state: bool = False, random_goal: bool = True,
-                 use_kinect: bool = False, use_zed2: bool = False,
+                 use_kinect: bool = False, use_zed2: bool = False, use_wrist_camera: bool = False,
                  cube_pose_topic: str = "/cube_pose",
                  auto_launch_cube_tracker: bool = False,
                  cube_tracker_camera: str = "kinect2",
@@ -628,7 +628,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_real.NED2RobotGoalEnv):
         # niryo_robot_bringup. move_gripper_joints will still route to
         # the /niryo_robot_tools_commander/action_server regardless.
         super().__init__(ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt,
-                         action_cycle_time=action_cycle_time, use_kinect=use_kinect, use_zed2=use_zed2,
+                         action_cycle_time=action_cycle_time, use_kinect=use_kinect, use_zed2=use_zed2, use_wrist_camera=use_wrist_camera,
                          remote_ip=remote_ip, local_ip=local_ip, multi_device_mode=multi_device_mode)
 
         # --- External cube-pose pipeline. Vision lives outside this env;

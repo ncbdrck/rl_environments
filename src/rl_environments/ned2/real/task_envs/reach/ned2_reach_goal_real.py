@@ -82,7 +82,7 @@ class NED2ReacherGoalEnv(ned2_robot_goal_real.NED2RobotGoalEnv):
                  rgb_obs_only: bool = False, normal_obs_only: bool = True, rgb_plus_normal_obs: bool = False,
                  rgb_plus_depth_plus_normal_obs: bool = False, debug: bool = False, action_speed: float = 0.5,
                  simple_dense_reward: bool = False, log_internal_state: bool = False, use_kinect: bool = False,
-                 use_zed2: bool = False, remote_ip: str = None, local_ip:str = None, multi_device_mode: bool = False,
+                 use_zed2: bool = False, use_wrist_camera: bool = False, remote_ip: str = None, local_ip:str = None, multi_device_mode: bool = False,
                  ):
 
 
@@ -433,7 +433,7 @@ class NED2ReacherGoalEnv(ned2_robot_goal_real.NED2RobotGoalEnv):
         Init super class.
         """
         super().__init__(ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt, use_kinect=use_kinect,
-                         use_zed2=use_zed2, action_cycle_time=action_cycle_time,
+                         use_zed2=use_zed2, use_wrist_camera=use_wrist_camera, action_cycle_time=action_cycle_time,
                          remote_ip=remote_ip, local_ip=local_ip, multi_device_mode=multi_device_mode)
 
         # for smoothing

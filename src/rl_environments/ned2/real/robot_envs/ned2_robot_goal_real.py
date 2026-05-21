@@ -5,7 +5,7 @@ import rostopic
 from gymnasium.envs.registration import register
 
 import numpy as np
-from sensor_msgs.msg import JointState, PointCloud2, Image
+from sensor_msgs.msg import JointState, PointCloud2, Image, CompressedImage
 from geometry_msgs.msg import Pose
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from niryo_robot_tools_commander.msg import ToolAction, ToolGoal, ToolCommand
@@ -48,7 +48,7 @@ class NED2RobotGoalEnv(RealGoalEnv.RealGoalEnv):
     """
 
     def __init__(self, ros_port: str = None, seed: int = None, close_env_prompt: bool = False, action_cycle_time=0.0,
-                 use_kinect: bool = False, use_zed2: bool = False,
+                 use_kinect: bool = False, use_zed2: bool = False, use_wrist_camera: bool = False,
                  remote_ip: str = None, local_ip:str = None, multi_device_mode: bool = True):
         """
         Initializes a new Robot Goal Environment
@@ -120,9 +120,10 @@ class NED2RobotGoalEnv(RealGoalEnv.RealGoalEnv):
                                                robot_description="/robot_description",
                                                ns="/")
 
-        # ---------- kinect or zed2
+        # ---------- kinect / zed2 / Niryo wrist camera
         self.use_kinect = use_kinect
         self.use_zed2 = use_zed2
+        self.use_wrist_camera = use_wrist_camera
 
         # todo: find the actual topic names
         if self.use_kinect:
@@ -151,6 +152,19 @@ class NED2RobotGoalEnv(RealGoalEnv.RealGoalEnv):
                                                    self.zed2_rgb_callback)
             self.zed2_rgb = Image()
             self.cv_image_rgb = None
+
+        # Niryo built-in wrist camera (real). See ned2_robot_real.py
+        # for the full rationale — Niryo publishes only a compressed
+        # stream via the niryo_robot_vision node.
+        if self.use_wrist_camera:
+            self.wrist_camera_rgb_sub = rospy.Subscriber(
+                "/niryo_robot_vision/compressed_video_stream",
+                CompressedImage,
+                self.wrist_camera_rgb_callback,
+                queue_size=1,
+            )
+            self.wrist_camera_rgb = CompressedImage()
+            self.cv_image_wrist = None
 
         """
         Using the _check_connection_and_readiness method to check for the connection status of subscribers, publishers 
@@ -499,6 +513,18 @@ class NED2RobotGoalEnv(RealGoalEnv.RealGoalEnv):
         # print("Shape of rgb:", cv_image_rgb.shape)  # for debugging
         # todo: for the CNN policy
         # (480, 640, 3) - for pytorch, this needs to be converted to (3, 480, 640)
+
+    def wrist_camera_rgb_callback(self, img_msg):
+        """
+        Callback for Niryo's built-in wrist camera (real).
+        Source: /niryo_robot_vision/compressed_video_stream
+        (sensor_msgs/CompressedImage). cv_bridge decodes the compressed
+        bytes; result goes to self.cv_image_wrist as RGB.
+        """
+        self.wrist_camera_rgb = img_msg
+        bridge = CvBridge()
+        cv_image_bgr = bridge.compressed_imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
+        self.cv_image_wrist = cv2.cvtColor(cv_image_bgr, cv2.COLOR_BGR2RGB)
 
     def zed2_depth_callback(self, data):
         """

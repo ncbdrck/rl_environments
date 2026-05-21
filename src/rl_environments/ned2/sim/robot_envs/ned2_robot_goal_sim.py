@@ -55,7 +55,8 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
 
     def __init__(self, ros_port: str = None, gazebo_port: str = None, gazebo_pid=None, seed: int = None,
                  real_time: bool = False, action_cycle_time=0.0, load_cube: bool = False, load_table: bool = False,
-                 use_camera: bool = False, gripper: bool = False):
+                 use_camera: bool = False, use_wrist_camera: bool = False,
+                 gripper: bool = False):
         """
         Initializes a new Robot Goal Environment
 
@@ -282,6 +283,16 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
                                                    self.kinect_rgb_callback)
             self.kinect_rgb = Image()
             self.cv_image_rgb = None
+
+        # ---------- Niryo built-in wrist camera (opt-in, default off).
+        # See ned2_robot_sim.py for the full rationale.
+        self.use_wrist_camera = use_wrist_camera
+
+        if self.use_wrist_camera:
+            self.wrist_camera_rgb_sub = rospy.Subscriber("/gazebo_camera/image_raw", Image,
+                                                          self.wrist_camera_rgb_callback)
+            self.wrist_camera_rgb = Image()
+            self.cv_image_wrist = None
 
         """
         Using the _check_connection_and_readiness method to check for the connection status of subscribers, publishers 
@@ -714,6 +725,17 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         # print("Shape of rgb:", cv_image_rgb.shape)  # for debugging
         # todo: for the CNN policy
         # (480, 640, 3) - for pytorch, this needs to be converted to (3, 480, 640)
+
+    def wrist_camera_rgb_callback(self, img_msg):
+        """
+        Callback for Niryo's built-in wrist camera (sim, on `camera_link`).
+        Topic: /gazebo_camera/image_raw — sensor_msgs/Image. Converts to
+        an OpenCV RGB numpy array on self.cv_image_wrist.
+        """
+        self.wrist_camera_rgb = img_msg
+        bridge = CvBridge()
+        cv_image_bgr = bridge.imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
+        self.cv_image_wrist = cv2.cvtColor(cv_image_bgr, cv2.COLOR_BGR2RGB)
 
     # helper fn for _check_connection_and_readiness
     def _check_joint_states_ready(self):

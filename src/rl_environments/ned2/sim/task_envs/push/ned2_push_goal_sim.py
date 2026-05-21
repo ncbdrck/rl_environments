@@ -99,7 +99,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
                  load_table: bool = True, debug: bool = False, action_speed: float = 0.5,
                  simple_dense_reward: bool = True, log_internal_state: bool = False, random_goal: bool = True,
                  random_cube_spawn: bool = True,
-                 realtime_mode: bool = True):
+                 realtime_mode: bool = True, use_wrist_camera: bool = False):
 
         # Real-time vs normal MDP step mode. See docstring above.
         self.realtime_mode = realtime_mode
@@ -511,7 +511,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         # single flag drives both step modes. NED2 uses ``use_camera`` (not
         # ``use_kinect``) for the head-mount-kinect2 stream.
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-                         real_time=self.realtime_mode, action_cycle_time=action_cycle_time, use_camera=use_camera,
+                         real_time=self.realtime_mode, action_cycle_time=action_cycle_time, use_camera=use_camera, use_wrist_camera=use_wrist_camera,
                          load_table=load_table)
 
         # for smoothing

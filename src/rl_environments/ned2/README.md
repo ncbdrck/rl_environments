@@ -208,6 +208,25 @@ Same contract as RX200 real:
     check if you redeploy NED2 in a multi-robot world where the base
     isn't at origin.
 
+## Wrist camera (opt-in)
+
+Niryo's built-in wrist camera is wired into both sim and real envs as
+an optional subscriber, gated by ``use_wrist_camera: bool = False`` on
+every NED2 robot / task env. Default off — no extra Gazebo overhead
+when you don't need it. Pass ``use_wrist_camera=True`` (via
+``gym.make``) to subscribe.
+
+| Side | Topic | Type | Source |
+|---|---|---|---|
+| Sim | ``/gazebo_camera/image_raw`` | ``sensor_msgs/Image`` | Gazebo plugin in ``niryo_ned2_camera.urdf.xacro`` (always spawned via our description-extras URDF chain) |
+| Real | ``/niryo_robot_vision/compressed_video_stream`` | ``sensor_msgs/CompressedImage`` | Niryo's ``vision_node.py``; needs ``niryo_robot_vision`` running on the robot |
+
+When enabled, the latest frame is decoded to RGB and stored on
+``self.cv_image_wrist`` (numpy array, HxWx3, uint8) — same convention
+as the existing kinect2/zed2 subscribers. Sim uses raw ``Image``; real
+uses ``CompressedImage`` decoded via ``cv_bridge.compressed_imgmsg_to_cv2``
+(Niryo doesn't expose a raw stream on real, only the compressed one).
+
 ### ✅ Already fixed
 
 Earlier session:

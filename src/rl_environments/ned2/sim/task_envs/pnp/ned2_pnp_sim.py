@@ -114,7 +114,7 @@ class NED2PnPEnv(ned2_robot_sim.NED2RobotEnv):
                  simple_dense_reward: bool = True, log_internal_state: bool = False, random_goal: bool = False,
                  random_cube_spawn: bool = True,
                  realtime_mode: bool = True,
-                 multi_goal: bool = False):
+                 multi_goal: bool = False, use_wrist_camera: bool = False):
 
         # Real-time vs normal MDP step mode. See docstring above.
         self.realtime_mode = realtime_mode
@@ -516,7 +516,7 @@ class NED2PnPEnv(ned2_robot_sim.NED2RobotEnv):
         # gripper, so ``gripper=True`` is passed so the gripper-equipped
         # URDF + tools_commander controller are loaded.
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-                         real_time=self.realtime_mode, action_cycle_time=action_cycle_time, use_camera=use_kinect,
+                         real_time=self.realtime_mode, action_cycle_time=action_cycle_time, use_camera=use_kinect, use_wrist_camera=use_wrist_camera,
                          load_table=load_table, gripper=True)
 
         # for smoothing — NED2 arm dim is 6 (vs RX200's 5).

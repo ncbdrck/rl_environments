@@ -73,7 +73,7 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
                  load_table: bool = True, debug: bool = False, action_speed: float = 0.5,
-                 simple_dense_reward: bool = True, log_internal_state: bool = False, extra_smoothing: bool = False):
+                 simple_dense_reward: bool = True, log_internal_state: bool = False, extra_smoothing: bool = False, use_wrist_camera: bool = False):
 
         """
         variables to keep track of ros, gazebo ports and gazebo pid
@@ -374,7 +374,7 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
         Init super class.
         """
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-                         real_time=True, action_cycle_time=action_cycle_time, use_camera=use_kinect,
+                         real_time=True, action_cycle_time=action_cycle_time, use_camera=use_kinect, use_wrist_camera=use_wrist_camera,
                          load_table=load_table)
 
         # for smoothing
