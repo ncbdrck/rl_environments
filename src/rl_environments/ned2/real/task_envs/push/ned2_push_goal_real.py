@@ -1660,7 +1660,7 @@ class NED2PushGoalEnv(ned2_robot_goal_real.NED2RobotGoalEnv):
         self.cube_pose_timeout_s = float(
             rospy.get_param('/ned2/cube_pose_timeout_s', 1.0))
         self.cube_init_pos = rospy.get_param(
-            '/ned2/cube_init_pos', [0.20, 0.0, 0.015])
+            '/ned2/cube_init_pos', [0.25, 0.0, 0.015])
 
     # ------------------------------------------------------
     #   Cube-pose subscriber helpers (external vision pipeline)
