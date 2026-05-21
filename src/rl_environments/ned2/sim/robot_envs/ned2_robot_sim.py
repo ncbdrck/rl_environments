@@ -121,8 +121,11 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         # extra urdf args
         urdf_xacro_args = None
 
-        # namespace of the robot
-        namespace = "ned2"
+        # namespace of the robot. Keep the leading slash — without it,
+        # rostopic.get_topic_type("ned2/joint_states", blocking=True)
+        # does an exact string match against the master's "/ned2/joint_states"
+        # and the readiness check spins forever. Matches goal_sim + RX200.
+        namespace = "/ned2"
 
         # robot state publisher
         robot_state_publisher_max_freq = None
@@ -247,7 +250,7 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         ros_common.ros_load_yaml(
             pkg_name=controller_package_name,
             file_name=controllers_file,
-            ns="/" + namespace,
+            ns="/" + namespace.lstrip("/"),
         )
 
         """
