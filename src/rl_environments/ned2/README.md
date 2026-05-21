@@ -8,6 +8,22 @@ This README lists what's NED2-specific (so future ports don't blindly
 copy RX200 conventions) and what's still **TODO** (placeholder values
 to tune against your physical workspace before first hardware run).
 
+## Sim bring-up package
+
+Phase A landed a sibling package, **`niryo_ned2_description_extras`**,
+that mounts the Ned2 on the same desk model the RX200 sim uses + adds
+a head-mount Kinect v2 + brings up `ros_control` so
+`niryo_robot_follow_joint_trajectory_controller` works in Gazebo.
+
+```bash
+# Verify standalone (no RL env):
+roslaunch niryo_ned2_description_extras ned2_gazebo.launch                # reach / push
+roslaunch niryo_ned2_description_extras ned2_gazebo.launch gripper:=true  # push / pnp
+```
+
+The RL env's `__init__` brings up MoveIt itself; the description launch
+above is just for visual sanity / standalone controller testing.
+
 ## Layout
 
 ```
@@ -115,22 +131,19 @@ Same contract as RX200 real:
 
 ### 🟡 Missing / unverified assets
 
-1. **`ned2_workspace_only.world` is referenced but does not exist.** The
-   sim train scripts (`ned2_*_train_sim.py`) print a recommended command
-   like `roslaunch gazebo_ros empty_world.launch
-   world_name:=$(rospack find rl_environments)/worlds/ned2_workspace_only.world`
-   but no `worlds/` directory exists in `rl_environments`. Either:
-   - Create the world (workspace_1 pad + workspace_grille, nothing else), or
-   - Update the train scripts to point at
-     `niryo_robot_gazebo/worlds/niryo_empty_world.world` and have the
-     train script add the workspace_1 model from
-     `GAZEBO_MODEL_PATH=$(rospack find niryo_robot_gazebo)/models`.
+1. ~~**`ned2_workspace_only.world` is referenced but does not exist.**~~
+   **Resolved (Phase A)** — `niryo_ned2_description_extras` provides
+   `ned2_gazebo.launch` which mounts the Ned2 on the RX200 desk model
+   (no separate world file needed). Train script docstrings updated to
+   point at the new launch.
 
 2. **No NED2-specific extrinsic YAMLs in `rl_envs_cube_tracker`.** Both
    `config/extrinsics/kinect2_to_rx200.yaml` and `zed2_to_rx200.yaml`
    reference `rx200/base_link`. Add `kinect2_to_ned2.yaml` +
-   `zed2_to_ned2.yaml` (with `parent_frame: base_link`) before using
-   `--cube-tracker-target-frame base_link` on NED2.
+   `zed2_to_ned2.yaml` (with `parent_frame: base_link`) + a
+   `d405_to_ned2.yaml` + `d405_to_rx200.yaml` (and a `d405.launch` in
+   the cube tracker package) before using `--cube-tracker-target-frame
+   base_link` on NED2. Queued for Phase C.
 
 ### 🟡 Production placeholder values to tune
 
@@ -168,13 +181,13 @@ Same contract as RX200 real:
    / 1.57 / 1.57 / 1.775`). Either intentional or a copy-paste artefact;
    confirm against Niryo's published velocity spec.
 
-9. **Camera-mount mismatch (sim)** — the NED2 sim robot env subscribes
-   to `/head_mount_kinect2/{rgb,depth}/image_raw`, the PR2-style external
-   kinect2 mount topic convention. NED2's built-in URDF camera publishes
-   to `/gazebo_camera/...` on `camera_link` (wrist-mounted). Either
-   spawn a head_mount_kinect2 model in your world OR retarget the
-   subscribers to NED2's wrist camera and update the cube_detection /
-   tracker accordingly.
+9. ~~**Camera-mount mismatch (sim)**~~ **Resolved (Phase A)** —
+   `niryo_ned2_description_extras/urdf/ned2_kinect.urdf.xacro` mounts a
+   head_mount_kinect2 at the same pose RX200 uses, so the RL env's
+   subscribers to `/head_mount_kinect2/{rgb,depth}/image_raw` now have
+   a real publisher in sim. The Ned2's built-in wrist camera is also
+   enabled (publishes on `/gazebo_camera/*`) — unused by the cube
+   tracker but available for future EE-mounted perception.
 
 10. **`/head_mount_kinect2/...` on real** — same topic name on real;
     expects `iai_kinect2/kinect2_bridge` running with `base_name:=head_mount_kinect2`
@@ -195,13 +208,20 @@ Same contract as RX200 real:
     check if you redeploy NED2 in a multi-robot world where the base
     isn't at origin.
 
-### ✅ Already fixed this session
+### ✅ Already fixed
 
+Earlier session:
 - `ned2_reach_goal_sim.py` smoothing vector size 5 → 6.
 - "5 elements" docstrings in all 4 robot env files → "6 elements".
 - `joint_2` min URDF violation in 3 configs (-2.09 → -1.833).
 - mors joint type/units corrected (revolute/radians → prismatic/metres)
   in PnP config + 4 comments across 2 task env files.
+
+Phase A:
+- New `niryo_ned2_description_extras` package with Gazebo launch
+  (mounts Ned2 on RX200 desk, head-mount Kinect v2, ros_control with
+  Niryo PID gains, optional gripper variant).
+- SRDF/URDF name mismatch resolved (`niryo_ned2`).
 
 ## Maintenance conventions for NED2
 

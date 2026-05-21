@@ -89,6 +89,30 @@ catkin_make
 source devel/setup.bash
 ```
 
+### 3a. Ned2 sim extras (`niryo_ned2_description_extras`)
+
+For Ned2 **simulation** envs (reach / push / pnp sim) we also need a
+small description-extras package that mounts the Ned2 on the same
+desk model the RX200 sim uses + adds a head-mount Kinect v2 + brings
+up `ros_control` so `niryo_robot_follow_joint_trajectory_controller`
+works in Gazebo. Mirrors the role of `reactorx200_description` for
+the RX200.
+
+```bash
+cd ~/catkin_ws/src
+git clone https://github.com/ncbdrck/niryo_ned2_description_extras.git
+cd ~/catkin_ws
+catkin_make
+source devel/setup.bash
+
+# Verify the sim bring-up works standalone (no RL env):
+roslaunch niryo_ned2_description_extras ned2_gazebo.launch                # reach / push
+roslaunch niryo_ned2_description_extras ned2_gazebo.launch gripper:=true  # pnp
+```
+
+Not needed for **real** Ned2 envs — those bring up the Niryo driver
+via `niryo_robot_bringup` instead.
+
 ### 4. UR5 Robot Repository
 
 You can download the official repository of the UR5 robot from ROS-Industrial
