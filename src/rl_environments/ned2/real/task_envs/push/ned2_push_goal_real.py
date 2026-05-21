@@ -46,9 +46,8 @@ ned2_push_goal_sim.py (the goal-env conventions):
   * ``robot_description`` rosparam (no ``/ned2/`` prefix on the real
     side either).
   * SAFETY_CHECK_LINKS and ``_check_action_links_safe`` live on the
-    parent robot env (hardening commit e5ac324); FK safety is exercised
-    in execute_action for both EE and joint branches (parity with
-    ned2_reach_real / ned2_push_real).
+    parent robot env; FK safety is exercised in execute_action for both
+    EE and joint branches (parity with ned2_reach_real / ned2_push_real).
   * Rosparams under ``/ned2/...`` (incl. cube_pose_timeout_s,
     cube_init_pos and joint_state_timeout_s in ned2_push_task_config.yaml).
   * No gripper init — NED2 push doesn't open/close (matches sim push +
