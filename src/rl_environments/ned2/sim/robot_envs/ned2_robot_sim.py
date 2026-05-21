@@ -68,8 +68,9 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         Actuators Topic List:
             MoveIt: Send the joint positions to the robot.
-            /ned2/niryo_robot_follow_joint_trajectory_controller/command: Send the joint positions to the robot.
-            /ned2/niryo_robot_tools_commander/action_server: Action server to control the robot tools.
+            /ned2/niryo_robot_follow_joint_trajectory_controller/command: arm trajectory controller.
+            /gazebo_tool_commander/follow_joint_trajectory: gripper action server (sim-only;
+                niryo_robot_tools_commander is bypassed in sim, see move_gripper_joints).
         """
         rospy.loginfo("Start Init NED2RobotEnv Multiros")
 
@@ -102,10 +103,19 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         """
         spawn_robot = True
 
-        # location of the robot URDF file
-        urdf_pkg_name = "niryo_robot_description"
-        urdf_file_name = "niryo_ned2_gazebo.urdf.xacro" if not gripper else "niryo_ned2_gripper1_n_camera.urdf"
-        urdf_folder = "/urdf/ned2"
+        # Location of the robot URDF file.
+        # Loaded from niryo_ned2_description_extras (sibling sim package
+        # — see rl_environments/README.md §3a) which wraps Niryo's
+        # upstream URDF + adds head-mount Kinect v2 (so /head_mount_kinect2/*
+        # subscribers actually receive data in sim) + Niryo's built-in
+        # wrist camera. Two variants:
+        #   ned2_kinect.urdf.xacro          → arm + kinect2 + wrist cam.
+        #   ned2_kinect_gripper.urdf.xacro  → arm + adaptive gripper +
+        #                                     kinect2 + wrist cam +
+        #                                     mors transmissions.
+        urdf_pkg_name = "niryo_ned2_description_extras"
+        urdf_file_name = "ned2_kinect.urdf.xacro" if not gripper else "ned2_kinect_gripper.urdf.xacro"
+        urdf_folder = "/urdf"
 
         # extra urdf args
         urdf_xacro_args = None

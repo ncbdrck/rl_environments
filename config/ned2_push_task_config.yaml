@@ -140,9 +140,9 @@ ned2: #namespace
       - 3.14    # joint_5 (dynamixel MoveIt cap)
       - 3.14    # joint_6 (dynamixel MoveIt cap)
 
-    # ******** goal space — cube target on table
-    # NED2's workspace_1 pad sits roughly in front of the base at
-    # x ≈ 0.20. Push goal is within reachable + on-table.
+    # ******** goal space — cube target on the desk
+    # Cube sits on the RX200 desk (z ≈ 0.015 above the desk top in
+    # base_link frame). Push goal stays inside Ned2's 490 mm reach.
     position_goal_max:
       x: 0.30
       y: 0.10
@@ -220,9 +220,9 @@ ned2: #namespace
 
 
     # ******** Safety (consumed by Ned2RobotEnv per-link FK check)
-    # Same defaults as ned2_reach_task_config.yaml. Ned2 mounts at
-    # world z=0 (no desk spawned by the robot env), so table_z here
-    # represents the ground / workspace_1 pad.
+    # Same defaults as ned2_reach_task_config.yaml — see that file for
+    # the full rationale (table_z is in base_link frame; desk is spawned
+    # via reactorx200_description's table model in Ned2RobotEnv).
     table_z: -0.005
     safety_z_margin: 0.015
     safety_z_margin_strict: 0.030

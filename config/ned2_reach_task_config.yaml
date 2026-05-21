@@ -164,10 +164,12 @@ ned2: #namespace
 
     # ******** Safety (consumed by Ned2RobotEnv per-link FK check)
     # Same defaults as rx200_reach_task_config.yaml; see that file for the
-    # full rationale on each value. Ned2 mounts at world z=0 (no desk
-    # spawned by the robot env), so table_z here represents the ground /
-    # workspace_1 pad. If/when Ned2 gets a desk mount, lift this value
-    # by the desk-top height.
+    # full rationale on each value. The Ned2 sim mounts the robot on the
+    # RX200 desk (spawned by Ned2RobotEnv from reactorx200_description's
+    # table model), so table_z here is in BASE_LINK frame (robot is at
+    # world z≈0.78 = desk top), and -0.005 means the FK floor is 5 mm
+    # below the desk top — gives the gripper a tiny tolerance for desk
+    # contact without flagging it as a safety violation.
     table_z: -0.005
     safety_z_margin: 0.015
     safety_z_margin_strict: 0.030
