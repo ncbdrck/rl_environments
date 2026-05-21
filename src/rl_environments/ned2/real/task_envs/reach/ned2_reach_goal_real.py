@@ -1272,7 +1272,7 @@ class NED2ReacherGoalEnv(ned2_robot_goal_real.NED2RobotGoalEnv):
         Function to get a reachable goal
         """
         for i in range(max_tries):
-            goal = self.goal_space.sample()
+            goal = self._sample_box(self.goal_space)
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1286,7 +1286,7 @@ class NED2ReacherGoalEnv(ned2_robot_goal_real.NED2RobotGoalEnv):
         """
         Function to get a random goal without checking
         """
-        return True, self.goal_space.sample()
+        return True, self._sample_box(self.goal_space)
 
     # not used
     def check_action_within_goal_space_fk(self, action):

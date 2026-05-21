@@ -1378,7 +1378,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         Function to get a reachable goal
         """
         for i in range(max_tries):
-            goal = self.goal_space.sample()
+            goal = self._sample_box(self.goal_space)
             goal[2] = 0.015  # since the robot is mounted on a table
 
             if self.test_goal_pos(goal):
@@ -1393,7 +1393,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         """
         Function to get a random goal without checking
         """
-        random_goal = self.goal_space.sample()
+        random_goal = self._sample_box(self.goal_space)
         random_goal[2] = 0.015
 
         return random_goal
@@ -1404,7 +1404,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
 
         return: random_cube_pose
         """
-        random_cube_pose = self.goal_space.sample()
+        random_cube_pose = self._sample_box(self.goal_space)
         random_cube_pose[2] = 0.015
 
         return random_cube_pose
