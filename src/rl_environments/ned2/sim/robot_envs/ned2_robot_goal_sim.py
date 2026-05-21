@@ -71,7 +71,7 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         Actuators Topic List:
             MoveIt: Send the joint positions to the robot.
             /ned2/niryo_robot_follow_joint_trajectory_controller/command: arm trajectory controller.
-            /gazebo_tool_commander/follow_joint_trajectory: gripper action server (sim-only;
+            /ned2/gazebo_tool_commander/follow_joint_trajectory: gripper action server (sim-only;
                 niryo_robot_tools_commander is bypassed in sim, see move_gripper_joints).
         """
         rospy.loginfo("Start Init NED2RobotGoalEnv Multiros!")
@@ -603,11 +603,18 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         """
         target = self._MORS_OPEN_POS if action == "open" else self._MORS_CLOSED_POS
 
+        # Controllers spawn under /ned2; the action server lives at
+        # /ned2/gazebo_tool_commander/..., not at root.
         client = actionlib.SimpleActionClient(
-            '/gazebo_tool_commander/follow_joint_trajectory',
+            '/ned2/gazebo_tool_commander/follow_joint_trajectory',
             FollowJointTrajectoryAction,
         )
-        client.wait_for_server()
+        if not client.wait_for_server(timeout=rospy.Duration(10.0)):
+            rospy.logerr(
+                "[NED2] gazebo_tool_commander action server not reachable at "
+                "/ned2/gazebo_tool_commander/follow_joint_trajectory after 10 s."
+            )
+            return False
 
         goal = FollowJointTrajectoryGoal()
         goal.trajectory = JointTrajectory()
@@ -620,7 +627,11 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         goal.trajectory.points.append(point)
 
         client.send_goal(goal)
-        client.wait_for_result()
+        if not client.wait_for_result(timeout=rospy.Duration(self._MORS_MOVE_SECS + 3.0)):
+            rospy.logwarn(
+                f"[NED2] gripper '{action}' trajectory did not return a "
+                f"result within {self._MORS_MOVE_SECS + 3.0:.1f} s; continuing."
+            )
         return True
 
     def smooth_trajectory(self, q_positions, time_from_start, multiplier=100):

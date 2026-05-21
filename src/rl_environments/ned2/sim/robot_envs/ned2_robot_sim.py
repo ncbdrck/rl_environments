@@ -70,7 +70,7 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         Actuators Topic List:
             MoveIt: Send the joint positions to the robot.
             /ned2/niryo_robot_follow_joint_trajectory_controller/command: arm trajectory controller.
-            /gazebo_tool_commander/follow_joint_trajectory: gripper action server (sim-only;
+            /ned2/gazebo_tool_commander/follow_joint_trajectory: gripper action server (sim-only;
                 niryo_robot_tools_commander is bypassed in sim, see move_gripper_joints).
         """
         rospy.loginfo("Start Init NED2RobotEnv Multiros")
@@ -754,11 +754,24 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         """
         target = self._MORS_OPEN_POS if action == "open" else self._MORS_CLOSED_POS
 
+        # Namespace must match where multiros spawned the controller —
+        # controllers are loaded under /ned2 (see controllers_list), so
+        # gazebo_tool_commander's action server lives at
+        # /ned2/gazebo_tool_commander/follow_joint_trajectory, NOT at
+        # /gazebo_tool_commander/... wait_for_server with no timeout
+        # would hang env.reset() forever if the path is wrong.
         client = actionlib.SimpleActionClient(
-            '/gazebo_tool_commander/follow_joint_trajectory',
+            '/ned2/gazebo_tool_commander/follow_joint_trajectory',
             FollowJointTrajectoryAction,
         )
-        client.wait_for_server()
+        if not client.wait_for_server(timeout=rospy.Duration(10.0)):
+            rospy.logerr(
+                "[NED2] gazebo_tool_commander action server not reachable at "
+                "/ned2/gazebo_tool_commander/follow_joint_trajectory after 10 s. "
+                "Check that controllers_list included gazebo_tool_commander "
+                "and that ned2_controllers_w_gripper.yaml loaded under /ned2."
+            )
+            return False
 
         goal = FollowJointTrajectoryGoal()
         goal.trajectory = JointTrajectory()
@@ -771,7 +784,13 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         goal.trajectory.points.append(point)
 
         client.send_goal(goal)
-        client.wait_for_result()
+        # Bounded wait so a stuck controller surfaces in logs rather than
+        # silently freezing env.step / env.reset.
+        if not client.wait_for_result(timeout=rospy.Duration(self._MORS_MOVE_SECS + 3.0)):
+            rospy.logwarn(
+                f"[NED2] gripper '{action}' trajectory did not return a "
+                f"result within {self._MORS_MOVE_SECS + 3.0:.1f} s; continuing."
+            )
         return True
 
     def smooth_trajectory(self, q_positions, time_from_start, multiplier=100):
