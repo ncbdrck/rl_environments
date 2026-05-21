@@ -444,10 +444,10 @@ class RX200PushEnv(rx200_robot_real.RX200RobotEnv):
         # "vision is deliberately external" contract — mocap / YOLO /
         # custom-detector users want their own pipeline, not AprilTag.
         if auto_launch_cube_tracker:
-            if cube_tracker_camera not in ("kinect2", "zed2"):
+            if cube_tracker_camera not in ("kinect2", "zed2", "d405"):
                 raise ValueError(
                     f"cube_tracker_camera must be 'kinect2' or 'zed2', "
-                    f"got {cube_tracker_camera!r}"
+                    f"got {cube_tracker_camera!r}. Must be 'kinect2', 'zed2', or 'd405'."
                 )
             _tracker_args = []
             if cube_pose_topic != "/cube_pose":

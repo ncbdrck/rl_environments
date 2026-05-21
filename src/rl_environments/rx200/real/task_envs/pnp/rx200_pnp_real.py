@@ -461,10 +461,10 @@ class RX200PnPEnv(rx200_robot_real.RX200RobotEnv):
         # Opt-in auto-launch of rl_envs_cube_tracker (default off — see
         # push std env for rationale).
         if auto_launch_cube_tracker:
-            if cube_tracker_camera not in ("kinect2", "zed2"):
+            if cube_tracker_camera not in ("kinect2", "zed2", "d405"):
                 raise ValueError(
                     f"cube_tracker_camera must be 'kinect2' or 'zed2', "
-                    f"got {cube_tracker_camera!r}"
+                    f"got {cube_tracker_camera!r}. Must be 'kinect2', 'zed2', or 'd405'."
                 )
             _tracker_args = []
             if cube_pose_topic != "/cube_pose":
