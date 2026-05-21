@@ -40,7 +40,7 @@ goal-env scaffolding: Pose unpacking, GoalEnv hooks, HER safety):
   * 6 arm joints (vs 5 on the RX200) → action dim 6+1=7 (joint mode) or
     3+1=4 (EE mode). The trailing "+1" is the gripper scalar.
   * NED2RobotGoalEnv parent class, ``use_camera`` kwarg (vs ``use_kinect``)
-  * SAFETY_CHECK_LINKS live on the robot env and use the ``ned2/...`` URDF
+  * SAFETY_CHECK_LINKS live on the robot env and use bare URDF
     link names
   * Cube spawn signature is (model_pos_x, model_pos_y); the z is decided
     inside spawn_cube_in_gazebo from ``load_table``

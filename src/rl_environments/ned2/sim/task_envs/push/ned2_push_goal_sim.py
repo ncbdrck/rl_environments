@@ -39,7 +39,7 @@ from ned2_push_sim.py (the std variant just landed) and
 ned2_reach_goal_sim.py (the goal-env conventions):
   * 6 arm joints (vs 5 on the RX200)
   * NED2RobotGoalEnv parent class, ``use_camera`` kwarg (vs ``use_kinect``)
-  * SAFETY_CHECK_LINKS live on the robot env and use the ``ned2/...`` URDF
+  * SAFETY_CHECK_LINKS live on the robot env and use bare URDF
     link names
   * Cube spawn signature is (model_pos_x, model_pos_y); the z is decided
     inside spawn_cube_in_gazebo from ``load_table``

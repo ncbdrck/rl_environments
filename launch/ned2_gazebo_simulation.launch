@@ -1,4 +1,22 @@
 <launch>
+  <!--
+    DEPRECATED (kept for legacy callers; nothing in this workspace uses it).
+
+    This launch brings up Ned2 at the ROOT namespace (no <group ns="ned2">),
+    loads the upstream niryo_moveit_config_standalone/config/ned2/ros_controllers.yaml
+    (which has no Gazebo PID gains, so the arm sags under gravity), and
+    includes the stock move_group.launch at root. The current RL env code
+    expects /ned2/joint_states, /ned2/move_group, /ned2/robot_description,
+    /ned2/gazebo_ros_control/pid_gains/... so this launch is NOT compatible
+    with what the env constructs against.
+
+    Use the working bring-up instead:
+      roslaunch niryo_ned2_description_extras ned2_gazebo.launch
+      roslaunch niryo_ned2_description_extras ned2_gazebo.launch gripper:=true
+
+    Those wrap MoveIt under /ned2, load the description-extras PID YAMLs,
+    and match what the env-internal spawn path does.
+  -->
   <arg name="paused" default="false"/>
   <arg name="gui" default="true"/>
   <arg name="hardware_version" default="ned2"/>
