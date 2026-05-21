@@ -886,7 +886,7 @@ class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
         linear_dist_ee_goal = current_goal - self.ee_pos  # goal is box dtype and ee_pos is numpy.array. It is okay
 
         # --- 2. Vector to goal (we are giving only the direction vector)
-        vec_ee_goal = linear_dist_ee_goal / np.linalg.norm(linear_dist_ee_goal)
+        vec_ee_goal = self._safe_unit_vector(linear_dist_ee_goal)
 
         # --- 3. Euclidian distance
         euclidean_distance_ee_goal = scipy.spatial.distance.euclidean(self.ee_pos, current_goal)  # float
