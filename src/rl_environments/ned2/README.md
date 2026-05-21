@@ -35,8 +35,9 @@ Registered in `rl_environments/__init__.py`.
 | Gripper command API | **binary** `"open"`/`"close"` (real: `niryo_robot_tools_commander`; sim: direct `/gazebo_tool_commander/follow_joint_trajectory` publish) | continuous position control |
 | PnP joint-mode action dim | **6 + 1 = 7** | 5 + 1 = 6 |
 | Arm controller topic | `/niryo_robot_follow_joint_trajectory_controller/command` | `/arm_controller/command` |
-| Reference frame | `base_link` (real) / `ned2/base_link` (sim) | `rx200/base_link` |
-| End-effector link | `wrist_link` (real) / `ned2/tool_link` (sim w/ gripper) | `rx200/ee_arm_link` etc. |
+| Reference frame | `base_link` (URDF links are bare on both sim + real) | `rx200/base_link` |
+| End-effector link | `wrist_link` (FK target on sim + real); `tool_link` is MoveIt's planning EE | `rx200/ee_arm_link` etc. |
+| Gazebo link-state lookup | `ned2/<link>` (model-qualified form for `get_model_state`) | `rx200/<link>` |
 
 ### Arm joint URDF limits (radians, from `niryo_ned2_param.urdf.xacro`)
 

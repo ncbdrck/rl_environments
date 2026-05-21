@@ -348,8 +348,8 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
                                                       queue_size=10)
 
         # parameters for calculating FK, IK
-        self.ee_link = "ned2/wrist_link"
-        self.ref_frame = "ned2/base_link"
+        self.ee_link = "wrist_link"
+        self.ref_frame = "base_link"
 
         # Fk with pykdl_utils - old method
         self.pykdl_robot = URDF.from_parameter_server(key='ned2/robot_description')
@@ -410,6 +410,9 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         if not self.real_time:
             gazebo_core.unpause_gazebo()
 
+        # relative_entity_name uses Gazebo's "<model>/<link>" convention
+        # (URDF links are bare, but the link-state service wants the
+        # model-qualified form).
         header, pose, twist, success = gazebo_models.gazebo_get_model_state(model_name=model_name,
                                                                             relative_entity_name="ned2/base_link")
 

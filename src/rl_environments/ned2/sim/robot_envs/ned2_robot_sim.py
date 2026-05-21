@@ -368,8 +368,8 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                                                       queue_size=10)
 
         # parameters for calculating FK, IK
-        self.ee_link = "ned2/wrist_link"
-        self.ref_frame = "ned2/base_link"
+        self.ee_link = "wrist_link"
+        self.ref_frame = "base_link"
 
         # Fk with pykdl_utils - old method
         self.pykdl_robot = URDF.from_parameter_server(key='ned2/robot_description')
@@ -456,6 +456,10 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
             gazebo_core.unpause_gazebo()
 
         # pose is a geometry_msgs/Pose Message
+        # relative_entity_name uses Gazebo's "<model>/<link>" convention
+        # (mirrors RX200's "rx200/base_link"). NOT a URDF link name — the
+        # URDF links are bare (base_link, wrist_link, ...) but Gazebo's
+        # link-state lookup needs the model-qualified form.
         header, pose, twist, success = gazebo_models.gazebo_get_model_state(model_name=model_name,
                                                                             relative_entity_name="ned2/base_link")
 
@@ -573,12 +577,12 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
     # of wrist via fixed joints) are skipped — checking wrist_link and
     # tool_link covers everything they bracket.
     SAFETY_CHECK_LINKS = (
-        "ned2/shoulder_link",
-        "ned2/arm_link",
-        "ned2/elbow_link",
-        "ned2/forearm_link",
-        "ned2/wrist_link",
-        "ned2/tool_link",
+        "shoulder_link",
+        "arm_link",
+        "elbow_link",
+        "forearm_link",
+        "wrist_link",
+        "tool_link",
     )
 
     def _check_action_links_safe(self, joint_targets, current_joints=None):
