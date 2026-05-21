@@ -36,7 +36,7 @@ Registered in `rl_environments/__init__.py`.
 | PnP joint-mode action dim | **6 + 1 = 7** | 5 + 1 = 6 |
 | Arm controller topic | `/niryo_robot_follow_joint_trajectory_controller/command` | `/arm_controller/command` |
 | Reference frame | `base_link` (URDF links are bare on both sim + real) | `rx200/base_link` |
-| End-effector link | `wrist_link` (FK target on sim + real); `tool_link` is MoveIt's planning EE | `rx200/ee_arm_link` etc. |
+| End-effector link | `tool_link` (FK target + MoveIt's planning EE; base→tool chain has 6 movable joints matching the 6-DOF action) | `rx200/ee_arm_link` etc. |
 | Gazebo link-state lookup | `ned2/<link>` (model-qualified form for `get_model_state`) | `rx200/<link>` |
 
 ### Arm joint URDF limits (radians, from `niryo_ned2_param.urdf.xacro`)

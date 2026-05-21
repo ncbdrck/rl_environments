@@ -348,7 +348,11 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
                                                       queue_size=10)
 
         # parameters for calculating FK, IK
-        self.ee_link = "wrist_link"
+        # tool_link, not wrist_link: 6-element action vector needs a
+        # 6-joint chain. base_link → wrist_link has 5 joints; base_link
+        # → tool_link has 6. tool_link also matches Niryo's SRDF
+        # planning-group EE.
+        self.ee_link = "tool_link"
         self.ref_frame = "base_link"
 
         # Fk with pykdl_utils - old method
