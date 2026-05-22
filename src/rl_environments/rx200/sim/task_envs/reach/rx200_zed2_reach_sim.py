@@ -740,8 +740,7 @@ class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):
                 if IK_found:
                     # Per-link FK safety: workspace + IK-feasible doesn't
                     # mean every link stays above the table. hasattr guard
-                    # lets this run against the legacy zed2 RobotEnv (no
-                    # safety method yet) — auto-activates once ported.
+                    # tolerates RobotEnv variants without the safety method.
                     if hasattr(self, "_check_action_links_safe"):
                         safe, reason = self._check_action_links_safe(
                             joint_positions, current_joints=self.joint_values

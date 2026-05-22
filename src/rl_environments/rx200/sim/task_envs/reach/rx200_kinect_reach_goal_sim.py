@@ -879,9 +879,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
                     # fold down with elbow/wrist below the surface even
                     # when the EE target sits above. Reject and let the
                     # not_within_goal_space penalty teach the constraint.
-                    # The hasattr guard lets this task env work against
-                    # the legacy goal RobotEnv (no safety method yet) —
-                    # safety auto-activates once that method is ported.
+                    # The hasattr guard tolerates RobotEnv variants that
+                    # don't expose ``_check_action_links_safe``.
                     if hasattr(self, "_check_action_links_safe"):
                         safe, reason = self._check_action_links_safe(
                             joint_positions, current_joints=self.joint_values
