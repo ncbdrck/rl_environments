@@ -105,12 +105,15 @@ class VX300SRobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         urdf_file_name = "vx300s_kinect.urdf.xacro"
         urdf_folder = "/urdf"
 
-        # extra urdf args.
-        # use_world_frame:=true makes the upstream interbotix vx300s URDF
-        # declare <link name="world"/> + a fixed world→base_link joint
-        # (defaults to false upstream). Our kinect2 xacro mounts on
-        # parent="world", so this declaration is required.
-        urdf_xacro_args = ["use_world_frame:=true"]
+        # extra urdf args. Two upstream defaults need flipping:
+        #   use_world_frame:=true      → declares <link name="world"/> so
+        #                                 our kinect2 xacro can attach.
+        #   load_gazebo_configs:=true  → pulls in interbotix_texture.gazebo
+        #                                 which has the gazebo_ros_control
+        #                                 plugin + Custom/Interbotix material.
+        #                                 Without it the controller_manager
+        #                                 never starts inside Gazebo.
+        urdf_xacro_args = ["use_world_frame:=true", "load_gazebo_configs:=true"]
 
         # namespace of the robot
         namespace = "/vx300s"
