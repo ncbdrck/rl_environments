@@ -536,7 +536,7 @@ class VX300SRobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         Uses the per-link ``KDLKinematics`` instances cached in
         ``self._safety_kin`` at __init__. Each subchain has its own joint
         count, so we slice ``q[:n]`` before calling ``forward`` — passing
-        the full 5-DOF vector to a 1-joint subchain crashes the PyKDL C++
+        the full 6-DOF vector to a 1-joint subchain crashes the PyKDL C++
         extension (asked me how I know).
 
         Rosparams (all under ``/vx300s/``, with sim/real variants where the

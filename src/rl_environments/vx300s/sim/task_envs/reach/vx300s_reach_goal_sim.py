@@ -47,8 +47,8 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_sim.VX300SRobotGoalEnv):
         * The robot reached the goal
 
     Here
-        * Action Space - Continuous (5 actions for joints or 3 xyz position of the end effector)
-        * Observation - Continuous (28 obs or rgb/depth image or a combination)
+        * Action Space - Continuous (6 actions for joints or 3 xyz position of the end effector)
+        * Observation - Continuous (31/28 obs or rgb/depth image or a combination)
         * Desired Goal - Goal we are trying to reach
         * Achieved Goal - Position of the EE
 
@@ -262,11 +262,11 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_sim.VX300SRobotGoalEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5
-        06. Joint velocities - 8
+        04. Current Joint values - 9
+        05. Previous action - 6 or 3 (joint or ee)
+        06. Joint velocities - 9
         
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+        total: (3x2) + 1 + (6 or 3) + (9x2) = 31 or 28
         
         # depth image
         480x640 32FC1
@@ -275,7 +275,7 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_sim.VX300SRobotGoalEnv):
         480x640X3 RGB images
 
         So observation space is a dictionary with
-            observation: Box(28 or 26) or Dict(28 or 26 and 480x640x3 or 480x640)
+            observation: Box(31 or 28) or Dict(31 or 28 and 480x640x3 or 480x640)
             achieved_goal: EE pos - 3 elements
             desired_goal: Goal pos - 3 elements
 
@@ -659,7 +659,7 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_sim.VX300SRobotGoalEnv):
         #
         # return achieved_goal.copy()
 
-        return self.ee_pos.copy()
+        return np.asarray(self.ee_pos, dtype=np.float32).copy()
 
     def _get_desired_goal(self):
         """
@@ -668,7 +668,7 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_sim.VX300SRobotGoalEnv):
         Returns:
             desired_goal: Reach Goal
         """
-        return self.reach_goal.copy()
+        return np.asarray(self.reach_goal, dtype=np.float32).copy()
 
     def compute_reward(self, achieved_goal, desired_goal, info) -> float:
         """
@@ -789,6 +789,15 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_sim.VX300SRobotGoalEnv):
 
         #  we don't need to execute the loop until we reset the env
         if self.init_done:
+
+            # Timer ticks can overlap controller/MoveIt startup or shutdown.
+            # If the arm joint vector is stale, skip this tick instead of
+            # applying a delta against an empty vector.
+            if rospy.is_shutdown():
+                return
+            jv = getattr(self, "joint_values", None)
+            if jv is None or len(jv) < 6:
+                return
 
             if self.debug:
                 if self.log_internal_state:
@@ -924,6 +933,12 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_sim.VX300SRobotGoalEnv):
                 # the live joint state (needed in normal MDP mode where there's
                 # no env_loop refreshing it). Mirrors the standard reach v0.
                 self.joint_values = self.get_joint_angles()
+                if self.joint_values is None or len(self.joint_values) < len(self.min_joint_values):
+                    if self.log_internal_state:
+                        rospy.logwarn("Joint action rejected: current joint vector is stale or empty.")
+                    self.movement_result = False
+                    self.within_goal_space = False
+                    return
 
                 # we can use smoothing using the action_cycle_time or delta_coeff
                 if self.use_smoothing:
@@ -1004,11 +1019,11 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_sim.VX300SRobotGoalEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5 or 3 (joint or ee)
-        06. Joint velocities - 8
+        04. Current Joint values - 9
+        05. Previous action - 6 or 3 (joint or ee)
+        06. Joint velocities - 9
 
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+        total: (3x2) + 1 + (6 or 3) + (9x2) = 31 or 28
 
         # depth image
         480x640 32FC1
@@ -1060,7 +1075,7 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_sim.VX300SRobotGoalEnv):
 
         # our observations
         obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
-                              prev_action, self.current_joint_velocities), axis=None)
+                              prev_action, self.current_joint_velocities), axis=None, dtype=np.float32)
 
         if self.log_internal_state:
             rospy.loginfo(f"Observations --->: {obs}")

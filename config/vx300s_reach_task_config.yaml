@@ -80,8 +80,8 @@ vx300s: # namespace
       - -1.76  # elbow
       - -3.14  # forearm_roll
       - -6.28  # gripper (continuous)
-      - 0.021  # left_finger    (vx300s URDF, NOT RX200's 0.015)
-      - -0.057 # right_finger   (vx300s URDF, NOT RX200's -0.037)
+      - 0.020  # left_finger    (obs margin around URDF 0.021 lower)
+      - -0.060 # right_finger   (obs margin around URDF -0.057 lower)
       - -1.85  # shoulder
       - -3.14  # waist
       - -1.87  # wrist_angle
@@ -91,34 +91,34 @@ vx300s: # namespace
       - 1.61   # elbow
       - 3.14   # forearm_roll
       - 6.28   # gripper (continuous)
-      - 0.057  # left_finger
-      - -0.021 # right_finger
+      - 0.060  # left_finger    (obs margin around URDF 0.057 upper)
+      - -0.020 # right_finger   (obs margin around URDF -0.021 upper)
       - 1.26   # shoulder
       - 3.14   # waist
       - 2.23   # wrist_angle
       - 3.14   # wrist_rotate
 
     min_joint_vel:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
+      - -10.0
+      - -10.0
+      - -10.0
+      - -5.0
+      - -5.0
+      - -10.0
+      - -10.0
+      - -10.0
+      - -10.0
 
     max_joint_vel:
-      - 3.14
-      - 3.14
-      - 3.14
-      - 1.00
-      - 1.00
-      - 1.00
-      - 3.14
-      - 3.14
-      - 3.14
+      - 10.0
+      - 10.0
+      - 10.0
+      - 5.0
+      - 5.0
+      - 10.0
+      - 10.0
+      - 10.0
+      - 10.0
 
     # ******** goal space (scaled up vs RX200 to use vx300s reach)
     position_goal_max:

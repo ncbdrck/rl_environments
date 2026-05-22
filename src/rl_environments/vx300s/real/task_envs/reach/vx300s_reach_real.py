@@ -40,8 +40,8 @@ class VX300SReacherEnv(vx300s_robot_real.VX300SRobotEnv):
         * The robot reached the goal
 
     Here
-        * Action Space - Continuous (5 actions for joints or 3 xyz position of the end effector)
-        * Observation - Continuous (28 obs or rgb/depth image or a combination)
+        * Action Space - Continuous (6 actions for joints or 3 xyz position of the end effector)
+        * Observation - Continuous (31/28 obs or rgb/depth image or a combination)
 
     Init Args:
         * new_roscore: Whether to launch a new roscore or not. If False, it is assumed that a roscore is already running.
@@ -235,11 +235,11 @@ class VX300SReacherEnv(vx300s_robot_real.VX300SRobotEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5 or 3 (joint or ee)
-        06. Joint velocities - 8
+        04. Current Joint values - 9
+        05. Previous action - 6 or 3 (joint or ee)
+        06. Joint velocities - 9
 
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+        total: (3x2) + 1 + (6 or 3) + (9x2) = 31 or 28
         
         # depth image
         480x640 32FC1
@@ -616,7 +616,7 @@ class VX300SReacherEnv(vx300s_robot_real.VX300SRobotEnv):
             # cleanup runs its 1s wait_for_message timeouts. Controllers
             # get unspawned mid-close → joint_states stops → get_joint_angles
             # returns []. Next tick's execute_action crashes on the
-            # delta-action broadcast (shape (0,) vs (5,)). Bail out cleanly
+            # delta-action broadcast (shape (0,) vs (6,)). Bail out cleanly
             # if ROS is shutting down or joint state is stale.
             if rospy.is_shutdown():
                 return
@@ -846,11 +846,11 @@ class VX300SReacherEnv(vx300s_robot_real.VX300SRobotEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5 or 3 (joint or ee)
-        06. Joint velocities - 8
+        04. Current Joint values - 9
+        05. Previous action - 6 or 3 (joint or ee)
+        06. Joint velocities - 9
 
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+        total: (3x2) + 1 + (6 or 3) + (9x2) = 31 or 28
 
         # depth image
         480x640 32FC1

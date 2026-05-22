@@ -41,8 +41,8 @@ class VX300SReacherEnv(vx300s_robot_sim.VX300SRobotEnv):
         * The robot reached the goal
 
     Here
-        * Action Space - Continuous (5 actions for joints or 3 xyz position of the end effector)
-        * Observation - Continuous (28 obs or rgb/depth image or a combination)
+        * Action Space - Continuous (6 actions for joints or 3 xyz position of the end effector)
+        * Observation - Continuous (31/28 obs or rgb/depth image or a combination)
 
     Init Args:
         * launch_gazebo: Whether to launch Gazebo or not. If False, it is assumed that Gazebo is already running.
@@ -259,11 +259,11 @@ class VX300SReacherEnv(vx300s_robot_sim.VX300SRobotEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5 or 3 (joint or ee)
-        06. Joint velocities - 8
+        04. Current Joint values - 9
+        05. Previous action - 6 or 3 (joint or ee)
+        06. Joint velocities - 9
 
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+        total: (3x2) + 1 + (6 or 3) + (9x2) = 31 or 28
 
         # depth image
         480x640 32FC1
@@ -674,7 +674,7 @@ class VX300SReacherEnv(vx300s_robot_sim.VX300SRobotEnv):
             # publishing once controllers are unspawned, so get_joint_angles
             # can start returning an empty list, and the delta-action
             # broadcast in execute_action crashes (Thread-N ValueError:
-            # shapes (0,) (5,) noticed during shutdown of v2). Bail out
+            # shapes (0,) (6,) noticed during shutdown of v2). Bail out
             # cleanly if ROS is shutting down or joint state is stale.
             if rospy.is_shutdown():
                 return
@@ -814,6 +814,12 @@ class VX300SReacherEnv(vx300s_robot_sim.VX300SRobotEnv):
 
                 # get the current joint values
                 self.joint_values = self.get_joint_angles()
+                if self.joint_values is None or len(self.joint_values) < len(self.min_joint_values):
+                    if self.log_internal_state:
+                        rospy.logwarn("Joint action rejected: current joint vector is stale or empty.")
+                    self.movement_result = False
+                    self.within_goal_space = False
+                    return
 
                 # we can use smoothing using the action_cycle_time or delta_coeff
                 if self.extra_smoothing:
@@ -895,11 +901,11 @@ class VX300SReacherEnv(vx300s_robot_sim.VX300SRobotEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5 or 3 (joint or ee)
-        06. Joint velocities - 8
+        04. Current Joint values - 9
+        05. Previous action - 6 or 3 (joint or ee)
+        06. Joint velocities - 9
 
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+        total: (3x2) + 1 + (6 or 3) + (9x2) = 31 or 28
 
         # depth image
         480x640 32FC1

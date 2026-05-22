@@ -10,7 +10,7 @@ setup_args = generate_distutils_setup(
     description="The rl_environments package",
     url="https://github.com/ncbdrck/rl_environments.git",
     keywords=['ROS', 'reinforcement learning', 'machine-learning', 'gym', 'gymnasium', 'robotics', 'openai', 'gazebo',
-              'realros', 'multiros', 'reactorx200', 'UR5', 'Niryo'],
+              'realros', 'multiros', 'reactorx200', 'viperx300s', 'VX300S', 'Trossen', 'UR5', 'Niryo'],
 
     author='Jayasekara Kapukotuwa',
     author_email='j.kapukotuwa@research.ait.ie',

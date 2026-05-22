@@ -41,8 +41,8 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         * The robot reached the goal
 
     Here
-        * Action Space - Continuous (5 actions for joints or 3 xyz position of the end effector)
-        * Observation - Continuous (28 obs or rgb/depth image or a combination)
+        * Action Space - Continuous (6 actions for joints or 3 xyz position of the end effector)
+        * Observation - Continuous (31/28 obs or rgb/depth image or a combination)
         * Desired Goal - Goal we are trying to reach
         * Achieved Goal - Position of the EE
 
@@ -238,11 +238,11 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5
-        06. Joint velocities - 8
+        04. Current Joint values - 9
+        05. Previous action - 6 or 3 (joint or ee)
+        06. Joint velocities - 9
         
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+        total: (3x2) + 1 + (6 or 3) + (9x2) = 31 or 28
         
         # depth image
         480x640 32FC1
@@ -251,7 +251,7 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         480x640X3 RGB images
 
         So observation space is a dictionary with
-            observation: Box(28 or 26) or Dict(28 or 26 and 480x640x3 or 480x640)
+            observation: Box(31 or 28) or Dict(31 or 28 and 480x640x3 or 480x640)
             achieved_goal: EE pos - 3 elements
             desired_goal: Goal pos - 3 elements
         """
@@ -611,7 +611,7 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         #
         # return achieved_goal.copy()
 
-        return self.ee_pos.copy()
+        return np.asarray(self.ee_pos, dtype=np.float32).copy()
 
     def _get_desired_goal(self):
         """
@@ -620,7 +620,7 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         Returns:
             desired_goal: Reach Goal
         """
-        return self.reach_goal.copy()
+        return np.asarray(self.reach_goal, dtype=np.float32).copy()
 
     def compute_reward(self, achieved_goal, desired_goal, info) -> float:
         """
@@ -747,7 +747,7 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
             # cleanup runs its 1s wait_for_message timeouts. Controllers
             # get unspawned mid-close → joint_states stops → get_joint_angles
             # returns []. Next tick's execute_action crashes on the
-            # delta-action broadcast (shape (0,) vs (5,)). Bail out cleanly
+            # delta-action broadcast (shape (0,) vs (6,)). Bail out cleanly
             # if ROS is shutting down or joint state is stale.
             if rospy.is_shutdown():
                 return
@@ -979,11 +979,11 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 8
-        05. Previous action - 5 or 3 (joint or ee)
-        06. Joint velocities - 8
+        04. Current Joint values - 9
+        05. Previous action - 6 or 3 (joint or ee)
+        06. Joint velocities - 9
 
-        total: (3x2) + 1 + (5 or 3) + (8x2) = 28 or 26
+        total: (3x2) + 1 + (6 or 3) + (9x2) = 31 or 28
 
         # depth image
         480x640 32FC1
@@ -1035,7 +1035,7 @@ class VX300SReacherGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
 
         # our observations
         obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
-                              prev_action, self.current_joint_velocities), axis=None)
+                              prev_action, self.current_joint_velocities), axis=None, dtype=np.float32)
 
         if self.log_internal_state:
             rospy.loginfo(f"Observations --->: {obs}")
