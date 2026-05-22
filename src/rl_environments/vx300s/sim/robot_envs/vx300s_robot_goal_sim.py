@@ -105,8 +105,12 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         urdf_file_name = "vx300s_kinect.urdf.xacro"
         urdf_folder = "/urdf"
 
-        # extra urdf args
-        urdf_xacro_args = None  # we don't have any in the env
+        # extra urdf args.
+        # use_world_frame:=true → upstream interbotix vx300s URDF declares
+        # <link name="world"/> + a fixed world→base_link joint so our
+        # head-mount kinect2 (parent="world") can attach. Upstream default
+        # is false (the RX200 local fork flips it to true).
+        urdf_xacro_args = ["use_world_frame:=true"]
 
         # namespace of the robot
         namespace = "/vx300s"
