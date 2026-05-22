@@ -32,6 +32,9 @@ ALL_REACH_SIM_NAMES = [
     # Ned2 reach.
     "NED2ReacherSim-v0",
     "NED2ReacherGoalSim-v0",
+    # ViperX-300 S reach.
+    "VX300SReacherSim-v0",
+    "VX300SReacherGoalSim-v0",
 ]
 
 ALL_PUSH_SIM_NAMES = [
@@ -60,6 +63,9 @@ ALL_REACH_REAL_NAMES = [
     # Ned2 reach real.
     "NED2ReacherReal-v0",
     "NED2ReacherGoalReal-v0",
+    # ViperX-300 S reach real.
+    "VX300SReacherReal-v0",
+    "VX300SReacherGoalReal-v0",
 ]
 
 ALL_PUSH_REAL_NAMES = [
@@ -210,6 +216,24 @@ register(
 )
 
 
+# ============================ ViperX-300 S Reacher Multiros Environments ============================
+
+# vx300s reach (sim). Kinect-only variant for now; the Interbotix launch
+# infrastructure is shared with RX200 so the env's __init__ launches
+# xsarm_moveit_interface with robot_model:=vx300s dof:=6. Same per-link
+# FK safety contract as RX200 / NED2 — see VX300SRobotEnv.
+register(
+    id="VX300SReacherSim-v0",
+    entry_point="rl_environments.vx300s.sim.task_envs.reach.vx300s_reach_sim:VX300SReacherEnv",
+    max_episode_steps=100,
+)
+register(
+    id="VX300SReacherGoalSim-v0",
+    entry_point="rl_environments.vx300s.sim.task_envs.reach.vx300s_reach_goal_sim:VX300SReacherGoalEnv",
+    max_episode_steps=100,
+)
+
+
 # ---------------------------- Real Environments  ----------------------------
 
 # ============================ RX200 Reacher RealROS Environments ============================
@@ -309,5 +333,23 @@ register(
 register(
     id="NED2PnPGoalReal-v0",
     entry_point="rl_environments.ned2.real.task_envs.pnp.ned2_pnp_goal_real:NED2PnPGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ ViperX-300 S Reacher RealROS Environments ============================
+
+# vx300s reach (real). Mirror of the RX200 reach real contract — bare
+# vx300s URDF link names (`vx300s/base_link`, `vx300s/ee_gripper_link`),
+# `/vx300s/...` rosparam namespace, interbotix bringup expected externally
+# (xsarm_control + driver), same safety FK + joint-state staleness gate.
+register(
+    id="VX300SReacherReal-v0",
+    entry_point="rl_environments.vx300s.real.task_envs.reach.vx300s_reach_real:VX300SReacherEnv",
+    max_episode_steps=100,
+)
+register(
+    id="VX300SReacherGoalReal-v0",
+    entry_point="rl_environments.vx300s.real.task_envs.reach.vx300s_reach_goal_real:VX300SReacherGoalEnv",
     max_episode_steps=100,
 )
