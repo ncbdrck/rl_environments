@@ -606,9 +606,9 @@ class VX300SPnPGoalEnv(vx300s_robot_goal_sim.VX300SRobotGoalEnv):
         self.init_pos = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
 
         # close the gripper
-        self.init_close_gripper = np.array([0.018, -0.018], dtype=np.float32)
+        self.init_close_gripper = np.array([0.025, -0.025], dtype=np.float32)
         # open the gripper (not used)
-        self.init_open_gripper = np.array([0.036, -0.036], dtype=np.float32)
+        self.init_open_gripper = np.array([0.055, -0.055], dtype=np.float32)
 
         # Reset cube-velocity finite-diff state so the new episode doesn't
         # inherit the previous one's tail-end pose as its baseline.
@@ -859,8 +859,8 @@ class VX300SPnPGoalEnv(vx300s_robot_goal_sim.VX300SRobotGoalEnv):
         Function to apply an action to the robot.
 
         PnP action layout:
-          * Joint mode: ``action[:5]`` = 5 arm joint commands (delta or
-            absolute per ``delta_action``); ``action[5]`` = gripper scalar.
+          * Joint mode: ``action[:6]`` = 6 arm joint commands (delta or
+            absolute per ``delta_action``); ``action[6]`` = gripper scalar.
           * EE mode:    ``action[:3]`` = EE position (delta or absolute);
             ``action[3]`` = gripper scalar.
         The gripper scalar is ALWAYS treated as an absolute left-finger

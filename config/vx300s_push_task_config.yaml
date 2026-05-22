@@ -235,13 +235,13 @@ vx300s: #namespace
     gazebo_update_rate_multiplier: 1.0
 
 
-    # ******** Real-side cube tracking (consumed by RX200PushReal /
-    # RX200PushGoalReal). Real envs subscribe to a vision pipeline
+    # ******** Real-side cube tracking (consumed by VX300SPushReal /
+    # VX300SPushGoalReal). Real envs subscribe to a vision pipeline
     # that publishes geometry_msgs/PoseStamped on ``cube_pose_topic``.
     # If no message arrives within cube_pose_timeout_s, the env falls
     # back to ``cube_init_pos`` and emits a throttled warning. The
-    # fallback path keeps the env constructible during dry-runs /
-    # code review even when no vision pipeline is wired up.
+    # fallback path keeps the env constructible during dry-runs
+    # even when no vision pipeline is wired up.
     cube_pose_timeout_s: 1.0
     cube_init_pos: [0.25, 0.0, 0.015]
 
@@ -259,8 +259,8 @@ vx300s: #namespace
     not_within_goal_space_reward: -2.0
 
 
-    # ******** Safety (consumed by RX200RobotEnv per-link FK check)
-    # Same defaults as rx200_reach_task_config.yaml. See that file for the
+    # ******** Safety (consumed by VX300SRobotEnv per-link FK check)
+    # Same defaults as vx300s_reach_task_config.yaml. See that file for the
     # rationale on each value.
     table_z: -0.005
     safety_z_margin: 0.015

@@ -228,10 +228,11 @@ vx300s: #namespace
     gazebo_update_rate_multiplier: 1.0
 
 
-    # ******** Real-side cube tracking (consumed by RX200PnPReal /
-    # RX200PnPGoalReal). See rx200_push_task_config.yaml for the
-    # full semantics: subscribe to cube_pose_topic; fall back to
-    # cube_init_pos after cube_pose_timeout_s of silence.
+    # ******** Real-side cube tracking (consumed by VX300SPnPReal /
+    # VX300SPnPGoalReal). Real envs subscribe to a vision pipeline
+    # that publishes geometry_msgs/PoseStamped on ``cube_pose_topic``.
+    # If no message arrives within cube_pose_timeout_s, the env falls
+    # back to ``cube_init_pos`` and emits a throttled warning.
     cube_pose_timeout_s: 1.0
     cube_init_pos: [0.25, 0.0, 0.015]
 
@@ -246,7 +247,7 @@ vx300s: #namespace
     # range above the closed extreme — i.e. roughly "fingers actively
     # closing on something".
     grasp_dist_thresh: 0.05    # m, EE-to-cube distance ceiling
-    grasp_finger_thresh: 0.020 # m, left_finger position ceiling (closed if <)
+    grasp_finger_thresh: 0.024 # m, left_finger position ceiling (closed if <)
 
     # Multi-goal scaffolding (used only when multi_goal=True). The
     # intermediate goal is set to the cube spawn position lifted by
@@ -263,8 +264,8 @@ vx300s: #namespace
     not_within_goal_space_reward: -2.0
 
 
-    # ******** Safety (consumed by RX200RobotEnv per-link FK check)
-    # Same defaults as push / reach. See rx200_reach_task_config.yaml for
+    # ******** Safety (consumed by VX300SRobotEnv per-link FK check)
+    # Same defaults as push / reach. See vx300s_reach_task_config.yaml for
     # the rationale on each value.
     table_z: -0.005
     safety_z_margin: 0.015
