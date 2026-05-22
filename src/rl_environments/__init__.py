@@ -45,6 +45,9 @@ ALL_PUSH_SIM_NAMES = [
     # Ned2 push.
     "NED2PushSim-v0",
     "NED2PushGoalSim-v0",
+    # ViperX-300 S push.
+    "VX300SPushSim-v0",
+    "VX300SPushGoalSim-v0",
 ]
 
 ALL_PNP_SIM_NAMES = [
@@ -55,6 +58,9 @@ ALL_PNP_SIM_NAMES = [
     # Ned2 PnP.
     "NED2PnPSim-v0",
     "NED2PnPGoalSim-v0",
+    # ViperX-300 S PnP.
+    "VX300SPnPSim-v0",
+    "VX300SPnPGoalSim-v0",
 ]
 
 ALL_REACH_REAL_NAMES = [
@@ -74,6 +80,9 @@ ALL_PUSH_REAL_NAMES = [
     # Ned2 push real.
     "NED2PushReal-v0",
     "NED2PushGoalReal-v0",
+    # ViperX-300 S push real.
+    "VX300SPushReal-v0",
+    "VX300SPushGoalReal-v0",
 ]
 
 ALL_PNP_REAL_NAMES = [
@@ -82,6 +91,9 @@ ALL_PNP_REAL_NAMES = [
     # Ned2 PnP real.
     "NED2PnPReal-v0",
     "NED2PnPGoalReal-v0",
+    # ViperX-300 S PnP real.
+    "VX300SPnPReal-v0",
+    "VX300SPnPGoalReal-v0",
 ]
 
 
@@ -234,6 +246,34 @@ register(
 )
 
 
+# ============================ ViperX-300 S Push Multiros Environments ============================
+
+register(
+    id="VX300SPushSim-v0",
+    entry_point="rl_environments.vx300s.sim.task_envs.push.vx300s_push_sim:VX300SPushEnv",
+    max_episode_steps=100,
+)
+register(
+    id="VX300SPushGoalSim-v0",
+    entry_point="rl_environments.vx300s.sim.task_envs.push.vx300s_push_goal_sim:VX300SPushGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ ViperX-300 S PnP Multiros Environments ============================
+
+register(
+    id="VX300SPnPSim-v0",
+    entry_point="rl_environments.vx300s.sim.task_envs.pnp.vx300s_pnp_sim:VX300SPnPEnv",
+    max_episode_steps=100,
+)
+register(
+    id="VX300SPnPGoalSim-v0",
+    entry_point="rl_environments.vx300s.sim.task_envs.pnp.vx300s_pnp_goal_sim:VX300SPnPGoalEnv",
+    max_episode_steps=100,
+)
+
+
 # ---------------------------- Real Environments  ----------------------------
 
 # ============================ RX200 Reacher RealROS Environments ============================
@@ -351,5 +391,33 @@ register(
 register(
     id="VX300SReacherGoalReal-v0",
     entry_point="rl_environments.vx300s.real.task_envs.reach.vx300s_reach_goal_real:VX300SReacherGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ ViperX-300 S Push RealROS Environments ============================
+
+register(
+    id="VX300SPushReal-v0",
+    entry_point="rl_environments.vx300s.real.task_envs.push.vx300s_push_real:VX300SPushEnv",
+    max_episode_steps=100,
+)
+register(
+    id="VX300SPushGoalReal-v0",
+    entry_point="rl_environments.vx300s.real.task_envs.push.vx300s_push_goal_real:VX300SPushGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ ViperX-300 S PnP RealROS Environments ============================
+
+register(
+    id="VX300SPnPReal-v0",
+    entry_point="rl_environments.vx300s.real.task_envs.pnp.vx300s_pnp_real:VX300SPnPEnv",
+    max_episode_steps=100,
+)
+register(
+    id="VX300SPnPGoalReal-v0",
+    entry_point="rl_environments.vx300s.real.task_envs.pnp.vx300s_pnp_goal_real:VX300SPnPGoalEnv",
     max_episode_steps=100,
 )
