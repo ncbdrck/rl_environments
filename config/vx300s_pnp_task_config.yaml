@@ -185,7 +185,9 @@ vx300s: #namespace
       y: 0.20
       z: 0.25
     position_goal_min:
-      x: 0.15
+      x: 0.20  # bumped from 0.15: vx300s is longer-armed than RX200, so
+               # goals too close to base sit inside the dead-zone where
+               # IK can't reach without folding into self-collision.
       y: -0.20
       z: 0.025
 
@@ -218,7 +220,7 @@ vx300s: #namespace
       y: 0.20
       z: 0.25
     position_desired_goal_min:
-      x: 0.15
+      x: 0.20  # match position_goal_min.x (vx300s near-base dead-zone)
       y: -0.20
       z: 0.025
 
