@@ -10,7 +10,6 @@ Robots
 - Trossen Robotics ReactorX-200 - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/rx200.html)
 - Trossen Robotics ViperX-300S - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/vx300s.html)
 - [Niryo Ned 2](https://niryo.com/product/educational-desktop-robotic-arm/) - [Documentation](https://docs.niryo.com/robots/ned2/) - [ROS Documentation](https://niryorobotics.github.io/ned_ros/)
-- [Universal Robots UR5](https://www.universal-robots.com/products/ur5-robot/) - [ROS Documentation](http://wiki.ros.org/universal_robot/Tutorials/Getting%20Started%20with%20a%20Universal%20Robot%20and%20ROS-Industrial) - [ROS Driver](https://github.com/UniversalRobots/Universal_Robots_ROS_Driver)
 
 # Prerequisites
 
@@ -24,8 +23,7 @@ This script will install all the prerequisites mentioned above, including
 - MultiROS
 - Reactorx200
 - ViperX-300S
-- Ned2
-- UR5 robot repositories.
+- Ned2 robot repositories.
 
 ```bash
 # Make the script executable
@@ -136,39 +134,6 @@ roslaunch viperx300s_description vx300s_gazebo.launch load_cube:=true
 Not needed for **real** VX300S envs — the Interbotix driver handles
 hardware bring-up.
 
-### 4. UR5 Robot Repository
-
-You can download the official repository of the UR5 robot from ROS-Industrial
-
-```bash
-# install using apt
-sudo apt install ros-noetic-universal-robots
-
-# or, you can download the source code
-cd ~/catkin_ws/src
-git clone -b $ROS_DISTRO-devel https://github.com/ros-industrial/universal_robot.git
-
-# Install the dependencies
-cd ~/catkin_ws/
-rosdep update
-rosdep install --from-paths src --ignore-src -r -y
-
-# Build the workspace
-catkin_make
-source devel/setup.bash
-
-# if you are working with the real UR5 robot, you can also install the UR5 ROS driver
-sudo apt install ros-${ROS_DISTRO}-ur-robot-driver ros-${ROS_DISTRO}-ur-calibration
-```
-
-if you need to visualize the robot in rviz, you can use the default URDF visualization package of ROS
-```bash
-# install the package
-sudo apt-get install ros-noetic-urdf-tutorial
-
-# launch the visualization using above -urdf-tutorial package
-roslaunch urdf_tutorial display.launch model:='$(find mycobot_description)/urdf/mycobot_280_m5/mycobot_280_m5.urdf'
-```
 Please note that the instructions assume you are using Ubuntu 20.04 and ROS Noetic. If you are using a different operating system or ROS version, make sure to adapt the commands accordingly.
 
 # Installation
