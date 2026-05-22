@@ -25,14 +25,6 @@ from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
 from tf.transformations import euler_from_matrix
 
-"""
-Although it is best to register only the task environment, one can also register the robot environment. 
-This is not necessary, but we can see if this section 
-works by calling "gymnasium.make" this env.
-but you need to
-    1. init a node - rospy.init_node('test_MyRobotGoalEnv')
-    2. gymnasium.make("VX300SRobotGoalEnv-v0")
-"""
 register(
     id='VX300SRobotGoalEnv-v0',
     entry_point='rl_environments.vx300s.real.robot_envs.vx300s_robot_goal_real:VX300SRobotGoalEnv',
@@ -65,20 +57,10 @@ class VX300SRobotGoalEnv(RealGoalEnv.RealGoalEnv):
         """
         rospy.loginfo("Start Init VX300SRobotGoalEnv RealROS")
 
-        """
-        Change the ros master
-        """
         if ros_port is not None:
             ros_common.change_ros_master(ros_port=ros_port)
 
-        """
-        parameters
-        """
         # none for now
-
-        """
-        Launch a roslaunch file that will setup the connection with the real robot 
-        """
 
         load_robot = True
         robot_pkg_name = "interbotix_xsarm_moveit_interface"
@@ -86,32 +68,17 @@ class VX300SRobotGoalEnv(RealGoalEnv.RealGoalEnv):
         robot_args = ["robot_model:=vx300s", "use_actual:=true", "dof:=6", "use_python_interface:=true",
                       "use_moveit_rviz:=true"]
 
-        """
-        namespace of the robot
-        """
         namespace = "/vx300s"
 
-        """
-        kill rosmaster at the end of the env
-        """
         kill_rosmaster = False
 
-        """
-        Clean ros Logs at the end of the env
-        """
         clean_logs = True
 
-        """
-        Init MyRobotGoalEnv.
-        """
         super().__init__(
             load_robot=load_robot, robot_pkg_name=robot_pkg_name, robot_launch_file=robot_launch_file,
             robot_args=robot_args, namespace=namespace, kill_rosmaster=kill_rosmaster, clean_logs=clean_logs,
             ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt, action_cycle_time=action_cycle_time)
 
-        """
-        initialise controller and sensor objects here
-        """
         # ---------- joint state
         if namespace is not None and namespace != '/':
             self.joint_state_topic = namespace + "/joint_states"
@@ -159,10 +126,6 @@ class VX300SRobotGoalEnv(RealGoalEnv.RealGoalEnv):
             self.zed2_rgb = Image()
             self.cv_image_rgb = None
 
-        """
-        Using the _check_connection_and_readiness method to check for the connection status of subscribers, publishers 
-        and services
-        """
         self._check_connection_and_readiness()
 
         # For ROS Controllers
@@ -225,36 +188,10 @@ class VX300SRobotGoalEnv(RealGoalEnv.RealGoalEnv):
             except Exception as _e:
                 rospy.logwarn(f"[SAFETY] kinematics setup failed for {_link}: {_e}")
 
-        """
-        Finished __init__ method
-        """
         rospy.loginfo("End Init VX300SRobotGoalEnv")
 
     # ---------------------------------------------------
     #   Custom methods for the Robot Environment
-
-    """
-    Define the custom methods for the environment
-        * fk_pykdl: Function to calculate the forward kinematics of the robot arm. We are using pykdl_utils.
-        * calculate_fk: Calculate the forward kinematics of the robot arm using the ros_kinematics package.
-        * calculate_ik: Calculate the inverse kinematics of the robot arm using the ros_kinematics package. 
-        * joint_state_callback: Get the joint state of the robot
-        * move_arm_joints: Set a joint position target only for the arm joints using low-level ros controllers.
-        * move_gripper_joints: Set a joint position target only for the gripper joints using low-level ros controllers.
-        * smooth_trajectory: Smooth the trajectory by interpolating between the current and target positions.
-        * publish_trajectory: Publish the entire trajectory at once.
-        * set_trajectory_joints: Set a joint position target only for the arm joints.
-        * set_trajectory_ee: Set a pose target for the end effector of the robot arm.
-        * get_ee_pose: Get end-effector pose a geometry_msgs/PoseStamped message
-        * get_ee_rpy: Get end-effector orientation as a list of roll, pitch, and yaw angles.
-        * get_joint_angles: Get current joint angles of the robot arm - 6 elements
-        * check_goal: Check if the goal is reachable
-        * check_goal_reachable_joint_pos: Check if the goal is reachable with joint positions
-        * kinect_depth_callback: Callback function for kinect depth sensor
-        * kinect_rgb_callback: Callback function for kinect rgb sensor
-        * zed2_depth_callback: Callback function for zed2 depth sensor
-        * zed2_rgb_callback: Callback function for zed2 rgb sensor
-    """
 
     def fk_pykdl(self, action):
         """

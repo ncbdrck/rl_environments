@@ -35,16 +35,6 @@ from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
 from tf.transformations import euler_from_matrix
 
-"""
-Although it is best to register only the task environment, one can also register the robot environment. 
-This is not necessary, but we can see if this section 
-(Load the robot to gazebo and can control the robot with moveit or ros controllers)
-works by calling "gymnasium.make" this env.
-but you need to
-    1. run gazebo - gazebo_core.launch_gazebo(launch_roscore=False, paused=False, pub_clock_frequency=100, gui=True)
-    2. init a node - rospy.init_node('test_MyRobotGoalEnv')
-    3. run the env - env = gymnasium.make('VX300SRobotGoalEnv-v0')
-"""
 register(
     id='VX300SRobotGoalEnv-v0',
     entry_point='rl_environments.vx300s.sim.robot_envs.vx300s_robot_goal_sim:VX300SRobotGoalEnv',
@@ -78,15 +68,9 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         """
         rospy.loginfo("Start Init VX300SRobotGoalEnv Multiros!")
 
-        """
-        Change the ros/gazebo master
-        """
         if ros_port is not None:
             ros_common.change_ros_gazebo_master(ros_port=ros_port, gazebo_port=gazebo_port)
 
-        """
-        real time parameters
-        """
         self.real_time = real_time  # if True, the simulation will run in real time
 
         # we don't need to pause/unpause gazebo if we are running in real time
@@ -95,15 +79,9 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         else:
             unpause_pause_physics = True
 
-        """
-        Unpause Gazebo
-        """
         if not self.real_time:
             gazebo_core.unpause_gazebo()
 
-        """
-        Spawning the robot in Gazebo
-        """
         spawn_robot = True
 
         # location of the robot URDF file
@@ -144,9 +122,6 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         controllers_file = "vx300s_controller.yaml"
         controllers_list = ["joint_state_controller", "arm_controller", "gripper_controller"]
 
-        """
-        Spawn other objects in Gazebo
-        """
         self.load_table = load_table
 
         if load_table:
@@ -171,37 +146,13 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
             if self.real_time:
                 gazebo_core.unpause_gazebo()
 
-        """
-        Set if the controllers in "controller_list" will be reset at the beginning of each episode, default is False.
-        """
         reset_controllers = False
 
-        """
-        Set the reset mode of gazebo at the beginning of each episode
-            "simulation": Reset gazebo simulation (Resets time) 
-            "world": Reset Gazebo world (Does not reset time) - default
-
-        resetting the "simulation" restarts the entire Gazebo environment, including all models and their positions, 
-        while resetting the "world" retains the models but resets their properties and states within the world        
-        """
         reset_mode = "world"
 
-        """
-        You can adjust the simulation step mode of Gazebo with two options:
-
-            1. Using Unpause, set action and Pause gazebo
-            2. Using the step function of Gazebo.
-
-        By default, the simulation step mode is set to 1 (gazebo pause and unpause services). 
-        However, if you choose simulation step mode 2, you can specify the number of steps Gazebo should take in each 
-        iteration. The default value for this is 1.
-        """
         sim_step_mode = 1
         num_gazebo_steps = 1
 
-        """
-        Set gazebo physics parameters to change the speed of the simulation
-        """
         gazebo_max_update_rate = None
         gazebo_timestep = None
 
@@ -213,24 +164,12 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
             gazebo_timestep = rospy.get_param('/vx300s/gazebo_time_step')
             rospy.loginfo(f"Applied Gazebo time_step = {gazebo_timestep}")
 
-        """
-        kill rosmaster at the end of the env
-        """
         kill_rosmaster = True
 
-        """
-        kill gazebo at the end of the env
-        """
         kill_gazebo = True
 
-        """
-        Clean ros Logs at the end of the env
-        """
         clean_logs = False
 
-        """
-        Init MyRobotGoalEnv.
-        """
         super().__init__(
             spawn_robot=spawn_robot, urdf_pkg_name=urdf_pkg_name, urdf_file_name=urdf_file_name,
             urdf_folder=urdf_folder, urdf_xacro_args=urdf_xacro_args, namespace=namespace,
@@ -245,9 +184,6 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
             clean_logs=clean_logs, ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
             unpause_pause_physics=unpause_pause_physics, action_cycle_time=action_cycle_time)
 
-        """
-        Define ros publisher, subscribers and services for robot and sensors
-        """
         # ---------- joint state
         if namespace is not None and namespace != '/':
             self.joint_state_topic = namespace + "/joint_states"
@@ -279,15 +215,8 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
             self.kinect_rgb = Image()
             self.cv_image_rgb = None
 
-        """
-        Using the _check_connection_and_readiness method to check for the connection status of subscribers, publishers 
-        and services
-        """
         self._check_connection_and_readiness()
 
-        """
-        initialise controller and sensor objects here
-        """
         self.arm_joint_names = ["waist",
                                 "shoulder",
                                 "elbow",
@@ -425,30 +354,6 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
 
     # ---------------------------------------------------
     #   Custom methods for the VX300S Robot Environment
-
-    """
-    Define the custom methods for the environment
-        * get_model_pose: Get the pose of an object in Gazebo
-        * spawn_cube_in_gazebo: Spawn a cube in Gazebo
-        * remove_cube_in_gazebo: Remove the cube from Gazebo
-        * fk_pykdl: Function to calculate the forward kinematics of the robot arm. We are using pykdl_utils.
-        * calculate_fk: Calculate the forward kinematics of the robot arm using the ros_kinematics package.
-        * calculate_ik: Calculate the inverse kinematics of the robot arm using the ros_kinematics package.
-        * joint_state_callback: Get the joint state of the robot
-        * move_arm_joints: Set a joint position target only for the arm joints using low-level ros controllers.
-        * move_gripper_joints: Set a joint position target only for the gripper joints using low-level ros controllers.
-        * smooth_trajectory: Smooth the trajectory by interpolating between the current and target positions.
-        * publish_trajectory: Publish the entire trajectory at once.
-        * set_trajectory_joints: Set a joint position target only for the arm joints.
-        * set_trajectory_ee: Set a pose target for the end effector of the robot arm.
-        * get_ee_pose: Get end-effector pose a geometry_msgs/PoseStamped message
-        * get_ee_rpy: Get end-effector orientation as a list of roll, pitch, and yaw angles.
-        * get_joint_angles: Get current joint angles of the robot arm - 6 elements
-        * check_goal: Check if the goal is reachable
-        * check_goal_reachable_joint_pos: Check if the goal is reachable with joint positions
-        * kinect_depth_callback: Callback function for kinect depth sensor
-        * kinect_rgb_callback: Callback function for kinect rgb sensor
-    """
 
     def get_model_pose(self, model_name="red_cube"):
         """

@@ -30,46 +30,6 @@ from multiros.utils import ros_markers
 #     max_episode_steps=1000,
 # )
 
-"""
-NED2 Pick-and-Place Goal Task Environment (sim).
-
-Ported from the RX200 PnP goal sim env (rx200_pnp_goal_sim.py), with the
-NED2-specific conventions taken from ned2_pnp_sim.py (the std variant, for
-PnP-specific gripper/grasp decisions) and ned2_push_goal_sim.py (for the
-goal-env scaffolding: Pose unpacking, GoalEnv hooks, HER safety):
-  * 6 arm joints (vs 5 on the RX200) → action dim 6+1=7 (joint mode) or
-    3+1=4 (EE mode). The trailing "+1" is the gripper scalar.
-  * NED2RobotGoalEnv parent class, ``use_camera`` kwarg (vs ``use_kinect``)
-  * SAFETY_CHECK_LINKS live on the robot env and use bare URDF
-    link names
-  * Cube spawn signature is (model_pos_x, model_pos_y); the z is decided
-    inside spawn_cube_in_gazebo from ``load_table``
-  * Cube model name defaults to "red_cube"
-  * Rosparams under '/ned2/...'
-  * Gripper API: the NED2 robot env's ``move_gripper_joints`` takes a
-    string ("open" / "close") and dispatches via the tools-commander
-    action server. The agent still emits a CONTINUOUS scalar gripper
-    command in [gripper_min, gripper_max] so the action-space shape stays
-    aligned with the RX200 PnP goal env. We discretize at the midpoint
-    just before dispatch and ONLY call the action server when the
-    discretized state changes vs the previous dispatch (state-change-only
-    dispatch — the action server blocks on ``wait_for_result``).
-  * is_grasped is derived from the ``joint_base_to_mors_1`` joint state.
-    The mors joints are PRISMATIC in metres (URDF: ±0.01 m stroke,
-    type="prismatic") — SAME units as RX200's prismatic fingers, just
-    symmetric around 0 with a tighter range. The YAML threshold should
-    be tuned for NED2's range (≈ 0 m is roughly mid-stroke).
-  * ``gripper=True`` is passed to the super-class so the gripper-equipped
-    URDF + tools_commander controller are loaded.
-  * GoalEnv API: compute_reward / compute_terminated / compute_truncated
-    (no underscore) — HER plumbing lives in compute_reward. Cube pose is
-    cached in _set_init_params so the first _get_achieved_goal returns a
-    real value (mirrors the push goal port).
-  * achieved/desired goal are 3-D (cube position) — matching the RX200
-    PnP goal template. is_grasped is NOT in the achieved_goal vector; it
-    rides in the ``observation`` slot only.
-"""
-
 
 class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
     """
@@ -135,23 +95,10 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         # the intermediate.
         self.multi_goal = multi_goal
 
-        """
-        variables to keep track of ros, gazebo ports and gazebo pid
-        """
         ros_port = None
         gazebo_port = None
         gazebo_pid = None
 
-        """
-        Initialise the env
-
-        It is recommended to launch Gazebo with a new roscore at this point for the following reasons:,
-            1.  This allows running a new rosmaster to enable vectorisation of the environment and the execution of
-                multiple environments concurrently.
-            2.  The environment can keep track of the process ID of Gazebo to automatically close it when env.close()
-                is called.
-
-        """
         # launch gazebo
         if launch_gazebo:
 
@@ -171,9 +118,6 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
             ros_common.change_ros_master(ros_port)
 
         else:
-            """
-            Check for roscore
-            """
             if ros_common.is_roscore_running() is False:
                 print("roscore is not running! Launching a new roscore and Gazebo!")
                 ros_port, gazebo_port, gazebo_pid = gazebo_core.launch_gazebo(launch_roscore=new_roscore,
@@ -189,31 +133,15 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
 
         rospy.init_node(self.node_name, anonymous=True)
 
-        """
-        Provide a description of the task.
-        """
         rospy.loginfo(f"Starting {self.node_name}")
 
-        """
-        Exit the program if
-        - (1/environment_loop_rate) is greater than action_cycle_time
-        """
         if (1.0 / environment_loop_rate) > action_cycle_time:
             rospy.logerr("The environment loop rate is greater than the action cycle time. Exiting the program!")
             rospy.signal_shutdown("Exiting the program!")
             exit()
 
-        """
-        log internal state - using rospy loginfo, logwarn, logerr
-        """
         self.log_internal_state = log_internal_state
 
-        """
-        Reward Architecture
-            * Dense - Default
-            * Sparse - -1 if not done and 1 if done
-            * All the others and misspellings - default to "Dense" reward
-        """
         if reward_type.lower() == "sparse":
             self.reward_arc = "Sparse"
 
@@ -228,64 +156,30 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         # for simple, we only return the distance to the goal (negative Euclidean distance = -d)
         self.simple_dense_reward = simple_dense_reward
 
-        """
-        Use action as deltas
-        """
         self.delta_action = delta_action
         self.delta_coeff = delta_coeff
 
-        """
-        Use smoothing for actions
-        """
         self.use_smoothing = use_smoothing
         self.action_cycle_time = action_cycle_time
 
-        """
-        Action speed - Time to complete the trajectory
-        """
         self.action_speed = action_speed
 
-        """
-        Observation space
-            * RGB image only
-            * traditional observations only (default)
-            * RGB image and traditional observations (combined)
-            * RGB image, Depth image and traditional observations (combined)
-        """
         self.rgb_obs = rgb_obs_only
         self.normal_obs = normal_obs_only
         self.rgb_plus_normal_obs = rgb_plus_normal_obs
         self.rgb_plus_depth_plus_normal_obs = rgb_plus_depth_plus_normal_obs
 
-        """
-        Action space
-            * Joint action space (default)
-            * End effector action space
-        """
         self.ee_action_type = ee_action_type
 
-        """
-        Goal and Cube spawn
-        """
         self.random_goal = random_goal
         self.random_cube_spawn = random_cube_spawn
 
-        """
-        Debug
-        """
         self.debug = debug
-
-        """
-        Load YAML param file
-        """
 
         # add to ros parameter server
         ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="ned2_pnp_task_config.yaml", ns="/")
         self._get_params()
 
-        """
-        Define the action space.
-        """
         # Joint action space or End effector action space
         # ROS and Gazebo often use double-precision (64-bit),
         # but we are using single-precision (32-bit) as it is typical for RL implementations.
@@ -317,31 +211,6 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         # continuous command into "open" / "close" before dispatching to
         # the NED2 tools-commander action server.
         self.gripper_cmd_mid = 0.5 * (self.gripper_min + self.gripper_max)
-
-        """
-        Define the observation space.
-
-        # typical observation
-        01. EE pos - 3
-        02. EE rpy - 3
-        03. Vector to the goal (normalized linear distance) - 3
-        04. Euclidian distance (cube to pnp goal)- 1
-        05. Current Joint values - len(joint_pos_all)  (6 arm + gripper joints)
-        06. Previous action - 7 or 4 (joint+gripper or ee+gripper)
-        07. Joint velocities - same len as joint_pos_all
-        08. Cube pos - 3
-        09. Cube rpy - 3
-        10. Cube linear velocity (finite-diff) - 3
-        11. Cube angular velocity (rpy-diff) - 3
-        12. Cube position relative to EE - 3
-        13. is_grasped - 1 (derived binary)
-
-        # depth image
-        480x640 32FC1
-
-        # rgb image
-        480x640X3 RGB images
-        """
 
         # ---- ee pos
         observations_high_ee_pos_range = np.array(
@@ -526,12 +395,6 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
                 'desired_goal': self.desired_goal_space,
             })
 
-        """
-        Goal space for sampling
-        - default - not used for selecting a random goal
-        - used for spawning the cube at a random position in Gazebo - random_cube_spawn==True
-        - if specified, sample a goal within the specified range to push the cube to - random_goal==True
-        """
         # ---- Goal pos
         high_goal_pos_range = np.array(
             np.array([self.position_goal_max["x"], self.position_goal_max["y"], self.position_goal_max["z"]]))
@@ -542,9 +405,6 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         self.goal_space = spaces.Box(low=low_goal_pos_range, high=high_goal_pos_range, dtype=np.float32,
                                      seed=seed)
 
-        """
-        Workspace so we can check if the action is within the workspace
-        """
         # ---- Workspace
         high_workspace_range = np.array(
             np.array([self.workspace_max["x"], self.workspace_max["y"], self.workspace_max["z"]]))
@@ -555,17 +415,11 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         # we don't need to set the seed here since we're not sampling from this space
         self.workspace_space = spaces.Box(low=low_workspace_range, high=high_workspace_range, dtype=np.float32)
 
-        """
-        Define subscribers/publishers and Markers as needed.
-        """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
                                                  lifetime=30.0)
         self.cube_marker = ros_markers.RosMarker(frame_id="world", ns="cube", marker_type=2, marker_topic="cube_pos",
                                                  lifetime=30.0)
 
-        """
-        Init super class.
-        """
         # NED2RobotGoalEnv maps real_time → unpause_pause_physics; this
         # single flag drives both step modes. NED2 uses ``use_camera`` (not
         # ``use_kinect``) for the head-mount-kinect2 stream. PnP needs the
@@ -645,9 +499,6 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         self.cube_pos = None
         self.cube_ori = None
 
-        """
-        Finished __init__ method
-        """
         rospy.loginfo(f"Finished Init of {self.node_name}")
 
     # -------------------------------------------------------

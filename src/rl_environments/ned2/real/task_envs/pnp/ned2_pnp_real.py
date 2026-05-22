@@ -31,72 +31,6 @@ from realros.utils import ros_markers
 #     max_episode_steps=1000,
 # )
 
-"""
-NED2 Pick-and-Place Task Environment (real).
-
-Ported from rx200_pnp_real.py with the NED2-specific conventions taken
-from ned2_push_real.py and ned2_pnp_sim.py:
-  * 6 arm joints (vs 5 on the RX200) → action dim 6+1=7 (joint mode) or
-    3+1=4 (EE mode). The trailing "+1" is the gripper scalar.
-  * NED2RobotEnv (real) parent class. Real-side keeps ``use_kinect`` /
-    ``use_zed2`` kwargs (only the sim parent renamed to ``use_camera``).
-  * ``ref_frame = "base_link"`` and ``ee_link = "wrist_link"`` on the
-    real parent (no ``ned2/`` namespace — that's a sim-only artifact).
-  * ``robot_description`` rosparam (no ``/ned2/`` prefix on the real
-    side either).
-  * SAFETY_CHECK_LINKS and ``_check_action_links_safe`` live on the
-    parent robot env; FK safety is exercised in execute_action for both
-    EE and joint branches (parity with ned2_reach_real / ned2_push_real).
-  * Rosparams under ``/ned2/...`` (incl. cube_pose_timeout_s,
-    cube_init_pos, joint_state_timeout_s, grasp_dist_thresh,
-    grasp_finger_thresh, lift_height, gripper_min/max in
-    ned2_pnp_task_config.yaml).
-  * Cube tracking is via the external ``/cube_pose`` topic just like
-    ned2_push_real, with the same auto_launch_cube_tracker convenience
-    that wires rl_envs_cube_tracker if the user opts in.
-
-PnP-specific (mirror ned2_pnp_sim.py):
-  * Gripper API: NED2's tools-commander action server only accepts
-    "open" / "close" — the agent emits a CONTINUOUS scalar gripper
-    command in [gripper_min, gripper_max] (action-space shape matches
-    RX200 PnP for cross-robot policies), and execute_action discretizes
-    at ``gripper_cmd_mid`` just before dispatch. State-change-only
-    caching via ``last_gripper_state`` avoids spamming the blocking
-    action server every env-loop tick.
-  * is_grasped is derived from the ``joint_base_to_mors_1`` joint state
-    (NED2's left gripper joint — PRISMATIC, metres, ±0.01 m stroke).
-  * Episode-start ``move_gripper_joints("open")`` + seed
-    ``last_gripper_state`` so the agent always begins with an empty hand
-    and the first close goal isn't dropped as redundant.
-
-Key sim/real divergences for NED2 PnP specifically:
-  * Sim reads cube pose from Gazebo via ``get_model_pose("red_cube")``;
-    real subscribes to ``/cube_pose`` (geometry_msgs/PoseStamped) and
-    falls back to ``cube_init_pos`` from YAML when stale. The fallback
-    keeps the env constructable for a dry-run without vision wired up.
-  * Sim spawns/respawns the cube each reset via
-    ``spawn_cube_in_gazebo``; real prompts the user to physically place
-    the cube and never touches the world.
-  * Sim has Gazebo's guaranteed /clock so it doesn't need the joint-
-    state staleness gate; the real env carries the same gate that
-    ned2_reach_real / ned2_push_real introduced so we stop the arm if
-    the niryo driver / cable drops mid-tick.
-  * Gripper STATE READ vs COMMAND on hardware: ``is_grasped`` reads
-    ``joint_base_to_mors_1`` position out of /joint_states (PRISMATIC,
-    metres). On real hardware the prismatic stroke is published by the
-    niryo driver's joint_state controller exactly like sim — the read
-    side is identical. The COMMAND side goes through the
-    tools-commander action server (NOT direct joint command), so
-    grasp_finger_thresh tuning happens against the niryo driver's
-    closed-finger encoder reading on the actual cube, which may
-    differ slightly from the URDF stroke limit. Calibrate on hardware.
-  * NED2RobotEnv (real) has NO ``gripper`` kwarg — the URDF + tools
-    commander + controllers come up via the external
-    niryo_robot_bringup. Sim takes ``gripper=True`` to swap the URDF;
-    real just trusts the bringup has the gripper attached and
-    move_gripper_joints will route to the action server either way.
-"""
-
 
 class NED2PnPEnv(ned2_robot_real.NED2RobotEnv):
     """
@@ -175,14 +109,8 @@ class NED2PnPEnv(ned2_robot_real.NED2RobotEnv):
         # the intermediate.
         self.multi_goal = multi_goal
 
-        """
-        variables to keep track of ros port
-        """
         ros_port = roscore_port
 
-        """
-        Initialise the env
-        """
         if multi_device_mode:
             if remote_ip is not None and local_ip is not None and ros_port is not None:
                 ros_common.change_ros_master_multi_device(remote_ip=remote_ip,
@@ -216,31 +144,15 @@ class NED2PnPEnv(ned2_robot_real.NED2RobotEnv):
 
         rospy.init_node(self.node_name, anonymous=True)
 
-        """
-        Provide a description of the task.
-        """
         rospy.loginfo(f"Starting {self.node_name}")
 
-        """
-        Exit the program if
-        - (1/environment_loop_rate) is greater than action_cycle_time
-        """
         if (1.0 / environment_loop_rate) > action_cycle_time:
             rospy.logerr("The environment loop rate is greater than the action cycle time. Exiting the program!")
             rospy.signal_shutdown("Exiting the program!")
             exit()
 
-        """
-        log internal state - using rospy loginfo, logwarn, logerr
-        """
         self.log_internal_state = log_internal_state
 
-        """
-        Reward Architecture
-            * Dense - Default
-            * Sparse - -1 if not done and 1 if done
-            * All the others and misspellings - default to "Dense" reward
-        """
         if reward_type.lower() == "sparse":
             self.reward_arc = "Sparse"
 
@@ -255,63 +167,29 @@ class NED2PnPEnv(ned2_robot_real.NED2RobotEnv):
         # for simple, we only return the distance to the goal (negative Euclidean distance = -d)
         self.simple_dense_reward = simple_dense_reward
 
-        """
-        Use action as deltas
-        """
         self.delta_action = delta_action
         self.delta_coeff = delta_coeff
 
-        """
-        Use smoothing for actions
-        """
         self.use_smoothing = use_smoothing
         self.action_cycle_time = action_cycle_time
 
-        """
-        Action speed - Time to complete the trajectory
-        """
         self.action_speed = action_speed
 
-        """
-        Observation space
-            * RGB image only
-            * traditional observations only (default)
-            * RGB image and traditional observations (combined)
-            * RGB image, Depth image and traditional observations (combined)
-        """
         self.rgb_obs = rgb_obs_only
         self.normal_obs = normal_obs_only
         self.rgb_plus_normal_obs = rgb_plus_normal_obs
         self.rgb_plus_depth_plus_normal_obs = rgb_plus_depth_plus_normal_obs
 
-        """
-        Action space
-            * Joint action space (default)
-            * End effector action space
-        """
         self.ee_action_type = ee_action_type
 
-        """
-        Goal and Cube spawn
-        """
         self.random_goal = random_goal
 
-        """
-        Debug
-        """
         self.debug = debug
-
-        """
-        Load YAML param file
-        """
 
         # add to ros parameter server
         ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="ned2_pnp_task_config.yaml", ns="/")
         self._get_params()
 
-        """
-        Define the action space.
-        """
         # Joint action space or End effector action space
         # ROS and Gazebo often use double-precision (64-bit),
         # but we are using single-precision (32-bit) as it is typical for RL implementations.
@@ -343,31 +221,6 @@ class NED2PnPEnv(ned2_robot_real.NED2RobotEnv):
         # continuous command into "open" / "close" before dispatching to
         # the NED2 tools-commander action server.
         self.gripper_cmd_mid = 0.5 * (self.gripper_min + self.gripper_max)
-
-        """
-        Define the observation space.
-
-        # typical observation
-        01. EE pos - 3
-        02. EE rpy - 3
-        03. Vector to the goal (normalized linear distance) - 3
-        04. Euclidian distance (cube to pnp goal)- 1
-        05. Current Joint values - len(joint_pos_all)  (6 arm + gripper joints)
-        06. Previous action - 7 or 4 (joint+gripper or ee+gripper)
-        07. Joint velocities - same len as joint_pos_all
-        08. Cube pos - 3
-        09. Cube rpy - 3
-        10. Cube linear velocity (finite-diff) - 3
-        11. Cube angular velocity (rpy-diff) - 3
-        12. Cube position relative to EE - 3
-        13. is_grasped - 1 (derived binary)
-
-        # depth image
-        480x640 32FC1
-
-        # rgb image
-        480x640X3 RGB images
-        """
 
         # ---- ee pos
         observations_high_ee_pos_range = np.array(
@@ -504,12 +357,6 @@ class NED2PnPEnv(ned2_robot_real.NED2RobotEnv):
             use_kinect = False
             self.observation_space = self.observations
 
-        """
-        Goal space for sampling
-        - default - not used for selecting a random goal
-        - used for spawning the cube at a random position in Gazebo - random_cube_spawn==True
-        - if specified, sample a goal within the specified range to push the cube to - random_goal==True
-        """
         # ---- Goal pos
         high_goal_pos_range = np.array(
             np.array([self.position_goal_max["x"], self.position_goal_max["y"], self.position_goal_max["z"]]))
@@ -520,9 +367,6 @@ class NED2PnPEnv(ned2_robot_real.NED2RobotEnv):
         self.goal_space = spaces.Box(low=low_goal_pos_range, high=high_goal_pos_range, dtype=np.float32,
                                      seed=seed)
 
-        """
-        Workspace so we can check if the action is within the workspace
-        """
         # ---- Workspace
         high_workspace_range = np.array(
             np.array([self.workspace_max["x"], self.workspace_max["y"], self.workspace_max["z"]]))
@@ -533,17 +377,11 @@ class NED2PnPEnv(ned2_robot_real.NED2RobotEnv):
         # we don't need to set the seed here since we're not sampling from this space
         self.workspace_space = spaces.Box(low=low_workspace_range, high=high_workspace_range, dtype=np.float32)
 
-        """
-        Define subscribers/publishers and Markers as needed.
-        """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
                                                  lifetime=30.0)
         self.cube_marker = ros_markers.RosMarker(frame_id="world", ns="cube", marker_type=2, marker_topic="cube_pos",
                                                  lifetime=30.0)
 
-        """
-        Init super class.
-        """
         # NED2RobotEnv (real) keeps ``use_kinect`` / ``use_zed2`` kwargs —
         # only the sim parent renamed to ``use_camera``. NOTE: unlike the
         # sim env, the real parent has NO ``gripper`` kwarg — the URDF /
@@ -660,9 +498,6 @@ class NED2PnPEnv(ned2_robot_real.NED2RobotEnv):
         self.movement_result = False
         self.within_goal_space = False
 
-        """
-        Finished __init__ method
-        """
         rospy.loginfo(f"Finished Init of {self.node_name}")
 
     # -------------------------------------------------------

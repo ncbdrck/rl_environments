@@ -31,44 +31,6 @@ from realros.utils import ros_markers
 #     max_episode_steps=1000,
 # )
 
-"""
-NED2 Push Task Environment (real).
-
-Ported from rx200_push_real.py with the NED2-specific conventions taken
-from ned2_push_sim.py + ned2_reach_real.py:
-  * 6 arm joints (vs 5 on the RX200) — init_pos, smoothing, close-race
-    guard (len(jv) < 6), and the comments all reflect this.
-  * NED2RobotEnv (real) parent class. Real-side keeps ``use_kinect`` /
-    ``use_zed2`` kwargs (only the sim parent renamed to ``use_camera``).
-  * ``ref_frame = "base_link"`` and ``ee_link = "wrist_link"`` on the
-    real parent (no ``ned2/`` namespace — that's a sim-only artifact).
-  * ``robot_description`` rosparam (no ``/ned2/`` prefix on the real
-    side either).
-  * SAFETY_CHECK_LINKS and ``_check_action_links_safe`` live on the
-    parent robot env; FK safety is exercised in execute_action for both
-    EE and joint branches (parity with ned2_reach_real).
-  * Rosparams under ``/ned2/...`` (incl. cube_pose_timeout_s,
-    cube_init_pos and joint_state_timeout_s in ned2_push_task_config.yaml).
-  * No gripper init — NED2 push doesn't open/close (matches sim push +
-    reach real). The cube is placed by hand and pushed with the wrist.
-  * Cube tracking is via the external ``/cube_pose`` topic just like
-    rx200_push_real, with the same auto_launch_cube_tracker convenience
-    that wires rl_envs_cube_tracker if the user opts in.
-
-Key sim/real divergences for push specifically:
-  * Sim reads cube pose from Gazebo via ``get_model_pose("red_cube")``;
-    real subscribes to ``/cube_pose`` (geometry_msgs/PoseStamped) and
-    falls back to ``cube_init_pos`` from YAML when stale. The fallback
-    keeps the env constructable in a dry-run without vision wired up.
-  * Sim spawns/respawns the cube each reset via
-    ``spawn_cube_in_gazebo``; real prompts the user to physically place
-    the cube and never touches the world.
-  * Sim has Gazebo's guaranteed /clock so it doesn't need the joint-
-    state staleness gate; the real env carries the same gate that
-    ned2_reach_real introduced so we stop the arm if the driver/cable
-    drops.
-"""
-
 
 class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
     """
@@ -143,9 +105,6 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         """
         ros_port = roscore_port
 
-        """
-        Initialise the env
-        """
         if multi_device_mode:
             if remote_ip is not None and local_ip is not None and ros_port is not None:
                 ros_common.change_ros_master_multi_device(remote_ip=remote_ip,
@@ -179,31 +138,15 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
 
         rospy.init_node(self.node_name, anonymous=True)
 
-        """
-        Provide a description of the task.
-        """
         rospy.loginfo(f"Starting {self.node_name}")
 
-        """
-        Exit the program if
-        - (1/environment_loop_rate) is greater than action_cycle_time
-        """
         if (1.0 / environment_loop_rate) > action_cycle_time:
             rospy.logerr("The environment loop rate is greater than the action cycle time. Exiting the program!")
             rospy.signal_shutdown("Exiting the program!")
             exit()
 
-        """
-        log internal state - using rospy loginfo, logwarn, logerr
-        """
         self.log_internal_state = log_internal_state
 
-        """
-        Reward Architecture
-            * Dense - Default
-            * Sparse - -1 if not done and 1 if done
-            * All the others and misspellings - default to "Dense" reward
-        """
         if reward_type.lower() == "sparse":
             self.reward_arc = "Sparse"
 
@@ -218,63 +161,29 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         # for simple, we only return the distance to the goal (negative Euclidean distance = -d)
         self.simple_dense_reward = simple_dense_reward
 
-        """
-        Use action as deltas
-        """
         self.delta_action = delta_action
         self.delta_coeff = delta_coeff
 
-        """
-        Use smoothing for actions
-        """
         self.use_smoothing = use_smoothing
         self.action_cycle_time = action_cycle_time
 
-        """
-        Action speed - Time to complete the trajectory
-        """
         self.action_speed = action_speed
 
-        """
-        Observation space
-            * RGB image only
-            * traditional observations only (default)
-            * RGB image and traditional observations (combined)
-            * RGB image, Depth image and traditional observations (combined)
-        """
         self.rgb_obs = rgb_obs_only
         self.normal_obs = normal_obs_only
         self.rgb_plus_normal_obs = rgb_plus_normal_obs
         self.rgb_plus_depth_plus_normal_obs = rgb_plus_depth_plus_normal_obs
 
-        """
-        Action space
-            * Joint action space (default)
-            * End effector action space
-        """
         self.ee_action_type = ee_action_type
 
-        """
-        Goal and Cube spawn
-        """
         self.random_goal = random_goal
 
-        """
-        Debug
-        """
         self.debug = debug
-
-        """
-        Load YAML param file
-        """
 
         # add to ros parameter server
         ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="ned2_push_task_config.yaml", ns="/")
         self._get_params()
 
-        """
-        Define the action space.
-        """
         # Joint action space or End effector action space
         # ROS and Gazebo often use double-precision (64-bit),
         # but we are using single-precision (32-bit) as it is typical for RL implementations.
@@ -293,30 +202,6 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
             # Joint action space
             self.action_space = spaces.Box(low=np.array(self.min_joint_values), high=np.array(self.max_joint_values),
                                            dtype=np.float32)
-
-        """
-        Define the observation space.
-
-        # typical observation
-        01. EE pos - 3
-        02. EE rpy - 3
-        03. Vector to the goal (normalized linear distance) - 3
-        04. Euclidian distance (cube to push goal)- 1
-        05. Current Joint values - 6 (NED2 has 6 arm joints)
-        06. Previous action - 6 or 3 (joint or ee)
-        07. Joint velocities - 6
-        08. Cube pos - 3
-        09. Cube rpy - 3
-        10. Cube linear velocity (finite-diff) - 3
-        11. Cube angular velocity (rpy-diff) - 3
-        12. Cube position relative to EE - 3
-
-        # depth image
-        480x640 32FC1
-
-        # rgb image
-        480x640X3 RGB images
-        """
 
         # ---- ee pos
         observations_high_ee_pos_range = np.array(
@@ -442,12 +327,6 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
             use_kinect = False
             self.observation_space = self.observations
 
-        """
-        Goal space for sampling
-        - default - not used for selecting a random goal
-        - used for spawning the cube at a random position in Gazebo - random_cube_spawn==True
-        - if specified, sample a goal within the specified range to push the cube to - random_goal==True
-        """
         # ---- Goal pos
         high_goal_pos_range = np.array(
             np.array([self.position_goal_max["x"], self.position_goal_max["y"], self.position_goal_max["z"]]))
@@ -458,9 +337,6 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         self.goal_space = spaces.Box(low=low_goal_pos_range, high=high_goal_pos_range, dtype=np.float32,
                                      seed=seed)
 
-        """
-        Workspace so we can check if the action is within the workspace
-        """
         # ---- Workspace
         high_workspace_range = np.array(
             np.array([self.workspace_max["x"], self.workspace_max["y"], self.workspace_max["z"]]))
@@ -471,17 +347,11 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         # we don't need to set the seed here since we're not sampling from this space
         self.workspace_space = spaces.Box(low=low_workspace_range, high=high_workspace_range, dtype=np.float32)
 
-        """
-        Define subscribers/publishers and Markers as needed.
-        """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
                                                  lifetime=30.0)
         self.cube_marker = ros_markers.RosMarker(frame_id="world", ns="cube", marker_type=2, marker_topic="cube_pos",
                                                  lifetime=30.0)
 
-        """
-        Init super class.
-        """
         # NED2RobotEnv (real) keeps ``use_kinect`` / ``use_zed2`` kwargs —
         # only the sim parent renamed to ``use_camera``. Mirroring
         # ned2_reach_real here so the head-mounted kinect2 / ZED2 stream
@@ -602,9 +472,6 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         self.movement_result = False
         self.within_goal_space = False
 
-        """
-        Finished __init__ method
-        """
         rospy.loginfo(f"Finished Init of {self.node_name}")
 
     # -------------------------------------------------------

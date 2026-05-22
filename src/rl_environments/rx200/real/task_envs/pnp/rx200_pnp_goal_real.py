@@ -29,11 +29,6 @@ from realros.utils import ros_markers
 #     max_episode_steps=1000,
 # )
 
-"""
-This is the v1 of the RX200 PnP Task Environment.
-- updated the action fn to get ee pos and joint values for delta actions
-"""
-
 
 class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
     """
@@ -99,14 +94,7 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         # the intermediate.
         self.multi_goal = multi_goal
 
-        """
-        variables to keep track of ros port
-        """
         ros_port = None
-
-        """
-        Initialise the env
-        """
 
         # launch a new roscore with default port
         if default_port:
@@ -134,31 +122,15 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
 
         rospy.init_node(self.node_name, anonymous=True)
 
-        """
-        Provide a description of the task.
-        """
         rospy.loginfo(f"Starting {self.node_name}")
 
-        """
-        Exit the program if
-        - (1/environment_loop_rate) is greater than action_cycle_time
-        """
         if (1.0 / environment_loop_rate) > action_cycle_time:
             rospy.logerr("The environment loop rate is greater than the action cycle time. Exiting the program!")
             rospy.signal_shutdown("Exiting the program!")
             exit()
 
-        """
-        log internal state - using rospy loginfo, logwarn, logerr
-        """
         self.log_internal_state = log_internal_state
 
-        """
-        Reward Architecture
-            * Dense - Default
-            * Sparse - -1 if not done and 1 if done
-            * All the others and misspellings - default to "Dense" reward
-        """
         if reward_type.lower() == "sparse":
             self.reward_arc = "Sparse"
 
@@ -173,63 +145,29 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         # for simple, we only return the distance to the goal (negative Euclidean distance = -d)
         self.simple_dense_reward = simple_dense_reward
 
-        """
-        Use action as deltas
-        """
         self.delta_action = delta_action
         self.delta_coeff = delta_coeff
 
-        """
-        Use smoothing for actions
-        """
         self.use_smoothing = use_smoothing
         self.action_cycle_time = action_cycle_time
 
-        """
-        Action speed - Time to complete the trajectory
-        """
         self.action_speed = action_speed
 
-        """
-        Observation space
-            * RGB image only
-            * traditional observations only (default)
-            * RGB image and traditional observations (combined)
-            * RGB image, Depth image and traditional observations (combined)
-        """
         self.rgb_obs = rgb_obs_only
         self.normal_obs = normal_obs_only
         self.rgb_plus_normal_obs = rgb_plus_normal_obs
         self.rgb_plus_depth_plus_normal_obs = rgb_plus_depth_plus_normal_obs
 
-        """
-        Action space
-            * Joint action space (default)
-            * End effector action space
-        """
         self.ee_action_type = ee_action_type
 
-        """
-        Goal and Cube spawn
-        """
         self.random_goal = random_goal
 
-        """
-        Debug
-        """
         self.debug = debug
-
-        """
-        Load YAML param file
-        """
 
         # add to ros parameter server
         ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="rx200_pnp_task_config.yaml", ns="/")
         self._get_params()
 
-        """
-        Define the action space.
-        """
         # Joint action space or End effector action space
         # ROS and Gazebo often use double-precision (64-bit),
         # but we are using single-precision (32-bit) as it is typical for RL implementations.
@@ -255,29 +193,6 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
             low = np.concatenate([np.array(self.min_joint_values), [self.gripper_min]]).astype(np.float32)
             high = np.concatenate([np.array(self.max_joint_values), [self.gripper_max]]).astype(np.float32)
             self.action_space = spaces.Box(low=low, high=high, dtype=np.float32)
-
-        """
-        Define the observation space.
-
-        # typical observation
-        01. EE pos - 3
-        02. EE rpy - 3
-        03. Vector to the goal (normalized linear distance) - 3
-        04. Euclidian distance (cube to push goal)- 1
-        05. Current Joint values - 8
-        06. Previous action - 5 or 3 (joint or ee)
-        07. Joint velocities - 8  # I don't think we need this since we're not using velocity control
-        08. Cube pos - 3
-        09. Cube rpy - 3
-
-        total: (3x5) + 1 + (5 or 3) + (8x2) = 37 or 35
-
-        # depth image
-        480x640 32FC1
-
-        # rgb image
-        480x640X3 RGB images
-        """
 
         # ---- ee pos
         observations_high_ee_pos_range = np.array(
@@ -457,12 +372,6 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
                 'desired_goal': self.desired_goal_space,
             })
 
-        """
-        Goal space for sampling
-        - default - not used for selecting a random goal
-        - used for spawning the cube at a random position in Gazebo - random_cube_spawn==True
-        - if specified, sample a goal within the specified range to push the cube to - random_goal==True
-        """
         # ---- Goal pos
         high_goal_pos_range = np.array(
             np.array([self.position_goal_max["x"], self.position_goal_max["y"], self.position_goal_max["z"]]))
@@ -473,9 +382,6 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         self.goal_space = spaces.Box(low=low_goal_pos_range, high=high_goal_pos_range, dtype=np.float32,
                                      seed=seed)
 
-        """
-        Workspace so we can check if the action is within the workspace
-        """
         # ---- Workspace
         high_workspace_range = np.array(
             np.array([self.workspace_max["x"], self.workspace_max["y"], self.workspace_max["z"]]))
@@ -486,17 +392,11 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         # we don't need to set the seed here since we're not sampling from this space
         self.workspace_space = spaces.Box(low=low_workspace_range, high=high_workspace_range, dtype=np.float32)
 
-        """
-        Define subscribers/publishers and Markers as needed.
-        """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
                                                  lifetime=30.0)
         self.cube_marker = ros_markers.RosMarker(frame_id="world", ns="cube", marker_type=2, marker_topic="cube_pos",
                                                  lifetime=30.0)
 
-        """
-        Init super class.
-        """
         super().__init__(ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt,
                          action_cycle_time=action_cycle_time, use_kinect=use_kinect, use_zed2=use_zed2)
 
@@ -591,9 +491,6 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         self.movement_result = False
         self.within_goal_space = False
 
-        """
-        Finished __init__ method
-        """
         rospy.loginfo(f"Finished Init of {self.node_name}")
 
     # -------------------------------------------------------

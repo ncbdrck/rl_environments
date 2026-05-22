@@ -28,11 +28,6 @@ from multiros.utils import ros_markers
 #     max_episode_steps=1000,
 # )
 
-"""
-This is the v1 of the VX300S Push Task Environment.
-- updated the action fn to get ee pos and joint values for delta actions
-"""
-
 
 class VX300SPushEnv(vx300s_robot_sim.VX300SRobotEnv):
     """
@@ -88,23 +83,10 @@ class VX300SPushEnv(vx300s_robot_sim.VX300SRobotEnv):
         # Real-time vs normal MDP step mode. See docstring above.
         self.realtime_mode = realtime_mode
 
-        """
-        variables to keep track of ros, gazebo ports and gazebo pid
-        """
         ros_port = None
         gazebo_port = None
         gazebo_pid = None
 
-        """
-        Initialise the env
-
-        It is recommended to launch Gazebo with a new roscore at this point for the following reasons:,
-            1.  This allows running a new rosmaster to enable vectorisation of the environment and the execution of
-                multiple environments concurrently.
-            2.  The environment can keep track of the process ID of Gazebo to automatically close it when env.close()
-                is called.
-
-        """
         # launch gazebo
         if launch_gazebo:
 
@@ -124,9 +106,6 @@ class VX300SPushEnv(vx300s_robot_sim.VX300SRobotEnv):
             ros_common.change_ros_master(ros_port)
 
         else:
-            """
-            Check for roscore
-            """
             if ros_common.is_roscore_running() is False:
                 print("roscore is not running! Launching a new roscore and Gazebo!")
                 ros_port, gazebo_port, gazebo_pid = gazebo_core.launch_gazebo(launch_roscore=new_roscore,
@@ -142,31 +121,15 @@ class VX300SPushEnv(vx300s_robot_sim.VX300SRobotEnv):
 
         rospy.init_node(self.node_name, anonymous=True)
 
-        """
-        Provide a description of the task.
-        """
         rospy.loginfo(f"Starting {self.node_name}")
 
-        """
-        Exit the program if
-        - (1/environment_loop_rate) is greater than action_cycle_time
-        """
         if (1.0 / environment_loop_rate) > action_cycle_time:
             rospy.logerr("The environment loop rate is greater than the action cycle time. Exiting the program!")
             rospy.signal_shutdown("Exiting the program!")
             exit()
 
-        """
-        log internal state - using rospy loginfo, logwarn, logerr
-        """
         self.log_internal_state = log_internal_state
 
-        """
-        Reward Architecture
-            * Dense - Default
-            * Sparse - -1 if not done and 1 if done
-            * All the others and misspellings - default to "Dense" reward
-        """
         if reward_type.lower() == "sparse":
             self.reward_arc = "Sparse"
 
@@ -181,64 +144,30 @@ class VX300SPushEnv(vx300s_robot_sim.VX300SRobotEnv):
         # for simple, we only return the distance to the goal (negative Euclidean distance = -d)
         self.simple_dense_reward = simple_dense_reward
 
-        """
-        Use action as deltas
-        """
         self.delta_action = delta_action
         self.delta_coeff = delta_coeff
 
-        """
-        Use smoothing for actions
-        """
         self.use_smoothing = use_smoothing
         self.action_cycle_time = action_cycle_time
 
-        """
-        Action speed - Time to complete the trajectory
-        """
         self.action_speed = action_speed
 
-        """
-        Observation space
-            * RGB image only
-            * traditional observations only (default)
-            * RGB image and traditional observations (combined)
-            * RGB image, Depth image and traditional observations (combined)
-        """
         self.rgb_obs = rgb_obs_only
         self.normal_obs = normal_obs_only
         self.rgb_plus_normal_obs = rgb_plus_normal_obs
         self.rgb_plus_depth_plus_normal_obs = rgb_plus_depth_plus_normal_obs
 
-        """
-        Action space
-            * Joint action space (default)
-            * End effector action space
-        """
         self.ee_action_type = ee_action_type
 
-        """
-        Goal and Cube spawn
-        """
         self.random_goal = random_goal
         self.random_cube_spawn = random_cube_spawn
 
-        """
-        Debug
-        """
         self.debug = debug
-
-        """
-        Load YAML param file
-        """
 
         # add to ros parameter server
         ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="vx300s_push_task_config.yaml", ns="/")
         self._get_params()
 
-        """
-        Define the action space.
-        """
         # Joint action space or End effector action space
         # ROS and Gazebo often use double-precision (64-bit),
         # but we are using single-precision (32-bit) as it is typical for RL implementations.
@@ -257,29 +186,6 @@ class VX300SPushEnv(vx300s_robot_sim.VX300SRobotEnv):
             # Joint action space
             self.action_space = spaces.Box(low=np.array(self.min_joint_values), high=np.array(self.max_joint_values),
                                            dtype=np.float32)
-
-        """
-        Define the observation space.
-
-        # typical observation
-        01. EE pos - 3
-        02. EE rpy - 3
-        03. Vector to the goal (normalized linear distance) - 3
-        04. Euclidian distance (cube to push goal)- 1
-        05. Current Joint values - 8
-        06. Previous action - 5 or 3 (joint or ee)
-        07. Joint velocities - 8  # I don't think we need this since we're not using velocity control
-        08. Cube pos - 3
-        09. Cube rpy - 3
-
-        total: (3x5) + 1 + (5 or 3) + (8x2) = 37 or 35
-
-        # depth image
-        480x640 32FC1
-
-        # rgb image
-        480x640X3 RGB images
-        """
 
         # ---- ee pos
         observations_high_ee_pos_range = np.array(
@@ -405,12 +311,6 @@ class VX300SPushEnv(vx300s_robot_sim.VX300SRobotEnv):
             use_kinect = False
             self.observation_space = self.observations
 
-        """
-        Goal space for sampling
-        - default - not used for selecting a random goal
-        - used for spawning the cube at a random position in Gazebo - random_cube_spawn==True
-        - if specified, sample a goal within the specified range to push the cube to - random_goal==True
-        """
         # ---- Goal pos
         high_goal_pos_range = np.array(
             np.array([self.position_goal_max["x"], self.position_goal_max["y"], self.position_goal_max["z"]]))
@@ -421,9 +321,6 @@ class VX300SPushEnv(vx300s_robot_sim.VX300SRobotEnv):
         self.goal_space = spaces.Box(low=low_goal_pos_range, high=high_goal_pos_range, dtype=np.float32,
                                      seed=seed)
 
-        """
-        Workspace so we can check if the action is within the workspace
-        """
         # ---- Workspace
         high_workspace_range = np.array(
             np.array([self.workspace_max["x"], self.workspace_max["y"], self.workspace_max["z"]]))
@@ -434,17 +331,11 @@ class VX300SPushEnv(vx300s_robot_sim.VX300SRobotEnv):
         # we don't need to set the seed here since we're not sampling from this space
         self.workspace_space = spaces.Box(low=low_workspace_range, high=high_workspace_range, dtype=np.float32)
 
-        """
-        Define subscribers/publishers and Markers as needed.
-        """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
                                                  lifetime=30.0)
         self.cube_marker = ros_markers.RosMarker(frame_id="world", ns="cube", marker_type=2, marker_topic="cube_pos",
                                                  lifetime=30.0)
 
-        """
-        Init super class.
-        """
         # VX300SRobotEnv maps real_time → unpause_pause_physics; this single
         # flag drives both step modes.
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
@@ -499,9 +390,6 @@ class VX300SPushEnv(vx300s_robot_sim.VX300SRobotEnv):
         self.movement_result = False
         self.within_goal_space = False
 
-        """
-        Finished __init__ method
-        """
         rospy.loginfo(f"Finished Init of {self.node_name}")
 
     # -------------------------------------------------------

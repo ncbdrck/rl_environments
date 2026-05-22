@@ -82,16 +82,6 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
         gazebo_port = None
         gazebo_pid = None
 
-        """
-        Initialise the env
-
-        It is recommended to launch Gazebo with a new roscore at this point for the following reasons:,
-            1.  This allows running a new rosmaster to enable vectorisation of the environment and the execution of
-                multiple environments concurrently.
-            2.  The environment can keep track of the process ID of Gazebo to automatically close it when env.close()
-                is called.
-
-        """
         # launch gazebo
         if launch_gazebo:
 
@@ -111,9 +101,6 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
             ros_common.change_ros_master(ros_port)
 
         else:
-            """
-            Check for roscore
-            """
             if ros_common.is_roscore_running() is False:
                 print("roscore is not running! Launching a new roscore and Gazebo!")
                 ros_port, gazebo_port, gazebo_pid = gazebo_core.launch_gazebo(launch_roscore=new_roscore,
@@ -129,31 +116,15 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
 
         rospy.init_node(self.node_name, anonymous=True)
 
-        """
-        Provide a description of the task.
-        """
         rospy.loginfo(f"Starting {self.node_name}")
 
-        """
-        Exit the program if
-        - (1/environment_loop_rate) is greater than action_cycle_time
-        """
         if (1.0 / environment_loop_rate) > action_cycle_time:
             rospy.logerr("The environment loop rate is greater than the action cycle time. Exiting the program!")
             rospy.signal_shutdown("Exiting the program!")
             exit()
 
-        """
-        log internal state - using rospy loginfo, logwarn, logerr
-        """
         self.log_internal_state = log_internal_state
 
-        """
-        Reward Architecture
-            * Dense - Default
-            * Sparse - -1 if not done and 1 if done
-            * All the others and misspellings - default to "Dense" reward
-        """
         if reward_type.lower() == "sparse":
             self.reward_arc = "Sparse"
 
@@ -168,59 +139,28 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
         # for simple, we only return the distance to the goal (negative Euclidean distance = -d)
         self.simple_dense_reward = simple_dense_reward
 
-        """
-        Use action as deltas
-        """
         self.delta_action = delta_action
         self.delta_coeff = delta_coeff
 
-        """
-        Use smoothing for actions
-        """
         self.use_smoothing = use_smoothing
         self.extra_smoothing = extra_smoothing
         self.action_cycle_time = action_cycle_time
 
-        """
-        Action speed - Time to complete the trajectory
-        """
         self.action_speed = action_speed
 
-        """
-        Observation space
-            * RGB image only
-            * traditional observations only (default)
-            * RGB image and traditional observations (combined)
-            * RGB image, Depth image and traditional observations (combined)
-        """
         self.rgb_obs = rgb_obs_only
         self.normal_obs = normal_obs_only
         self.rgb_plus_normal_obs = rgb_plus_normal_obs
         self.rgb_plus_depth_plus_normal_obs = rgb_plus_depth_plus_normal_obs
 
-        """
-        Action space
-            * Joint action space (default)
-            * End effector action space
-        """
         self.ee_action_type = ee_action_type
 
-        """
-        Debug
-        """
         self.debug = debug
-
-        """
-        Load YAML param file
-        """
 
         # add to ros parameter server
         ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="ned2_reach_task_config.yaml", ns="/")
         self._get_params()
 
-        """
-        Define the action space.
-        """
         # Joint action space or End effector action space
         # ROS and Gazebo often use double-precision (64-bit),
         # but we are using single-precision (32-bit) as it is typical for RL implementations.
@@ -239,26 +179,6 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
             # Joint action space
             self.action_space = spaces.Box(low=np.array(self.min_joint_values), high=np.array(self.max_joint_values),
                                            dtype=np.float32)
-
-        """
-        Define the observation space.
-
-        # typical observation
-        01. EE pos - 3
-        02. Vector to the goal (normalized linear distance) - 3
-        03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 6
-        05. Previous action - 6 or 3 (joint or ee)
-        06. Joint velocities - 6
-
-        total: (3x2) + 1 + (6 or 3) + (6x2)
-
-        # depth image
-        480x640 32FC1
-
-        # rgb image
-        480x640X3 RGB images
-        """
 
         # ---- ee pos
         observations_high_ee_pos_range = np.array(
@@ -338,9 +258,6 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
             use_kinect = False
             self.observation_space = self.observations
 
-        """
-        Goal space for sampling
-        """
         # ---- Goal pos
         high_goal_pos_range = np.array(
             np.array([self.position_goal_max["x"], self.position_goal_max["y"], self.position_goal_max["z"]]))
@@ -351,9 +268,6 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
         self.goal_space = spaces.Box(low=low_goal_pos_range, high=high_goal_pos_range, dtype=np.float32,
                                      seed=seed)
 
-        """
-        Workspace so we can check if the action is within the workspace
-        """
         # ---- Workspace
         high_workspace_range = np.array(
             np.array([self.workspace_max["x"], self.workspace_max["y"], self.workspace_max["z"]]))
@@ -364,15 +278,9 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
         # we don't need to set the seed here since we're not sampling from this space
         self.workspace_space = spaces.Box(low=low_workspace_range, high=high_workspace_range, dtype=np.float32)
 
-        """
-        Define subscribers/publishers and Markers as needed.
-        """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
                                                  lifetime=20.0)
 
-        """
-        Init super class.
-        """
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
                          real_time=True, action_cycle_time=action_cycle_time, use_camera=use_kinect, use_wrist_camera=use_wrist_camera,
                          load_table=load_table)
@@ -412,9 +320,6 @@ class NED2ReacherEnv(ned2_robot_sim.NED2RobotEnv):
         self.movement_result = False
         self.within_goal_space = False
 
-        """
-        Finished __init__ method
-        """
         rospy.loginfo(f"Finished Init of {self.node_name}")
 
     # -------------------------------------------------------
