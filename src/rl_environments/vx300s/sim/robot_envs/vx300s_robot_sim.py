@@ -1,5 +1,9 @@
 #!/bin/python3
 
+import os
+
+import rospkg
+
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 import numpy as np
@@ -28,6 +32,35 @@ from multiros.utils import ros_kinematics
 from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
 from tf.transformations import euler_from_matrix, euler_from_quaternion
+
+
+# Gazebo subprocess inheritance: when the env launches its own Gazebo
+# (multiros.GazeboBaseEnv path), it doesn't inherit the `<env>` tags
+# from any roslaunch — so GAZEBO_RESOURCE_PATH / GAZEBO_MODEL_PATH must
+# be set in os.environ at import time. Without RESOURCE_PATH pointing at
+# interbotix_xsarm_gazebo, the `Custom/Interbotix` OGRE material script
+# isn't found and the arm renders white in env-internal Gazebo.
+_rp = rospkg.RosPack()
+
+
+def _prepend_env_path(var: str, path: str) -> None:
+    if not path:
+        return
+    cur = os.environ.get(var, "")
+    if path in cur.split(":"):
+        return
+    os.environ[var] = f"{path}:{cur}" if cur else path
+
+
+try:
+    _prepend_env_path("GAZEBO_RESOURCE_PATH", _rp.get_path("interbotix_xsarm_gazebo"))
+except rospkg.common.ResourceNotFound:
+    pass
+try:
+    _prepend_env_path("GAZEBO_MODEL_PATH", _rp.get_path("viperx300s_description") + "/models")
+except rospkg.common.ResourceNotFound:
+    pass
+
 
 """
 Although it is best to register only the task environment, one can also register the robot environment. 

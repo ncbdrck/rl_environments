@@ -1,5 +1,11 @@
 #!/bin/python3
 
+# Import std robot env at module-load time — its module body sets
+# GAZEBO_RESOURCE_PATH + GAZEBO_MODEL_PATH so the env-internal Gazebo
+# finds the Custom/Interbotix material script + local models/. Without
+# this side-effect import, the goal-env path renders the arm white.
+from rl_environments.vx300s.sim.robot_envs import vx300s_robot_sim  # noqa: F401
+
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 import numpy as np
