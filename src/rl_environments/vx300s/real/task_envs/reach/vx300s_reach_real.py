@@ -17,7 +17,7 @@ from realros.utils import ros_markers
 
 # Register your environment using the OpenAI register method to utilize gym.make("TaskEnv-v0").
 # register(
-#     id='RX200ReacherReal-v0',
+#     id='VX300SReacherReal-v0',
 #     entry_point='rl_environments.vx300s.real.task_envs.reach.vx300s_reach_real:VX300SReacherEnv',
 #     max_episode_steps=100,
 # )
@@ -112,9 +112,9 @@ class VX300SReacherEnv(vx300s_robot_real.VX300SRobotEnv):
 
         # init the ros node
         if ros_port is not None:
-            self.node_name = "RX200ReacherEnvReal" + "_" + ros_port
+            self.node_name = "VX300SReacherEnvReal" + "_" + ros_port
         else:
-            self.node_name = "RX200ReacherEnvReal"
+            self.node_name = "VX300SReacherEnvReal"
 
         rospy.init_node(self.node_name, anonymous=True)
 

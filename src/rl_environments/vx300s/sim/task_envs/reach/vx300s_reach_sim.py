@@ -22,7 +22,7 @@ from multiros.utils import ros_markers
 
 # Register your environment using the gymnasium register method to utilize gym.make("TaskEnv-v0").
 # register(
-#     id='RX200ReacherSim-v2',
+#     id='VX300SReacherSim-v2',
 #     entry_point='rl_environments.vx300s.sim.task_envs.reach.vx300s_reach_sim_v2:VX300SReacherEnv',
 #     max_episode_steps=1000,
 # )
@@ -135,9 +135,9 @@ class VX300SReacherEnv(vx300s_robot_sim.VX300SRobotEnv):
 
         # init the ros node
         if ros_port is not None:
-            self.node_name = "RX200ReacherEnvSim" + "_" + ros_port
+            self.node_name = "VX300SReacherEnvSim" + "_" + ros_port
         else:
-            self.node_name = "RX200ReacherEnvSim"
+            self.node_name = "VX300SReacherEnvSim"
 
         rospy.init_node(self.node_name, anonymous=True)
 

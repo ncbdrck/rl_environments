@@ -32,10 +32,10 @@ This is not necessary, but we can see if this section
 works by calling "gymnasium.make" this env.
 but you need to
     1. init a node - rospy.init_node('test_MyRobotEnv')
-    2. gymnasium.make("RX200RobotBaseEnv-v0")
+    2. gymnasium.make("VX300SRobotBaseEnv-v0")
 """
 register(
-    id='RX200RobotBaseEnv-v0',
+    id='VX300SRobotBaseEnv-v0',
     entry_point='rl_environments.vx300s.real.robot_envs.vx300s_robot_real:VX300SRobotEnv',
     max_episode_steps=1000,
 )

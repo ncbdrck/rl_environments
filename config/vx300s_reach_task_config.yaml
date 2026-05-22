@@ -31,8 +31,8 @@ vx300s: # namespace
       - -3.14
       - -1.87
       - -3.14
-      - 0.015   # left_finger    (URDF: lower=0.015 upper=0.037)
-      - -0.037  # right_finger   (URDF: lower=-0.037 upper=-0.015)
+      - 0.021   # left_finger    (URDF: lower=0.021 upper=0.057 — wider stroke than RX200's 0.015/0.037)
+      - -0.057  # right_finger   (URDF: lower=-0.057 upper=-0.021)
 
     max_joint_pos_grasp:
       - 3.14
@@ -41,8 +41,8 @@ vx300s: # namespace
       - 3.14
       - 2.23
       - 3.14
-      - 0.037
-      - -0.015
+      - 0.057
+      - -0.021
 
     # ******** Observation Space — vx300s reach is 750 mm, ~2× the RX200.
     position_ee_max:
@@ -79,9 +79,9 @@ vx300s: # namespace
     min_joint_angles:
       - -1.76  # elbow
       - -3.14  # forearm_roll
-      - -6.28  # gripper
-      - 0.015  # left_finger
-      - -0.037 # right_finger
+      - -6.28  # gripper (continuous)
+      - 0.021  # left_finger    (vx300s URDF, NOT RX200's 0.015)
+      - -0.057 # right_finger   (vx300s URDF, NOT RX200's -0.037)
       - -1.85  # shoulder
       - -3.14  # waist
       - -1.87  # wrist_angle
@@ -90,9 +90,9 @@ vx300s: # namespace
     max_joint_angles:
       - 1.61   # elbow
       - 3.14   # forearm_roll
-      - 6.28   # gripper
-      - 0.037  # left_finger
-      - -0.015 # right_finger
+      - 6.28   # gripper (continuous)
+      - 0.057  # left_finger
+      - -0.021 # right_finger
       - 1.26   # shoulder
       - 3.14   # waist
       - 2.23   # wrist_angle
