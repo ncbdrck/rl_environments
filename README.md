@@ -8,6 +8,7 @@ This repository contains sim and real prebuild environments (`Gymnasium-based`) 
 
 Robots
 - Trossen Robotics ReactorX-200 - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/rx200.html)
+- Trossen Robotics ViperX-300S - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/vx300s.html)
 - [Niryo Ned 2](https://niryo.com/product/educational-desktop-robotic-arm/) - [Documentation](https://docs.niryo.com/robots/ned2/) - [ROS Documentation](https://niryorobotics.github.io/ned_ros/)
 - [Universal Robots UR5](https://www.universal-robots.com/products/ur5-robot/) - [ROS Documentation](http://wiki.ros.org/universal_robot/Tutorials/Getting%20Started%20with%20a%20Universal%20Robot%20and%20ROS-Industrial) - [ROS Driver](https://github.com/UniversalRobots/Universal_Robots_ROS_Driver)
 
@@ -21,7 +22,8 @@ This script will install all the prerequisites mentioned above, including
 - ROS Noetic
 - RealROS
 - MultiROS
-- Rx200
+- Reactorx200
+- ViperX-300S
 - Ned2
 - UR5 robot repositories.
 
@@ -112,6 +114,27 @@ roslaunch niryo_ned2_description_extras ned2_gazebo.launch gripper:=true  # pnp
 
 Not needed for **real** Ned2 envs — those bring up the Niryo driver
 via `niryo_robot_bringup` instead.
+
+### 3b. ViperX-300S sim extras (`viperx300s_description`)
+
+For VX300S **simulation** reach envs we use a local description-extras
+package that mirrors the RX200 tabletop setup: ViperX-300S on the cafe
+table, optional red cube, Kinect v2 mount, and `ros_control` controllers
+for Gazebo. Mirrors the role of `reactorx200_description` for the RX200.
+
+```bash
+cd ~/catkin_ws/src
+git clone https://github.com/ncbdrck/viperx300s_description.git
+cd ~/catkin_ws
+catkin_make
+source devel/setup.bash
+
+# Verify the standalone scene with table + red cube (no RL env):
+roslaunch viperx300s_description vx300s_gazebo.launch load_cube:=true
+```
+
+Not needed for **real** VX300S envs — the Interbotix driver handles
+hardware bring-up.
 
 ### 4. UR5 Robot Repository
 
@@ -223,6 +246,13 @@ if __name__ == '__main__':
     env = gym.make('RX200ReacherSim-v0', gazebo_gui=True, ee_action_type=False, seed=10,
                    delta_action=True, environment_loop_rate=10.0, action_cycle_time=0.500,
                    use_smoothing=False, action_speed=0.100, reward_type="dense", log_internal_state=False)
+
+    # VX300S reach follows the same surface; pass load_cube=True when you
+    # want the tabletop red cube in the sim scene.
+    # env = gym.make('VX300SReacherSim-v0', gazebo_gui=True, ee_action_type=False, seed=10,
+    #                delta_action=True, environment_loop_rate=10.0, action_cycle_time=0.500,
+    #                use_smoothing=False, action_speed=0.100, reward_type="dense",
+    #                log_internal_state=False, load_cube=True)
 
     # # --- goal environments
     # env = gym.make('RX200ReacherGoalSim-v0', gazebo_gui=False, ee_action_type=False, seed=10,
