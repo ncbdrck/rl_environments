@@ -88,7 +88,9 @@ class RX200PushEnv(rx200_robot_real.RX200RobotEnv):
                  cube_pose_topic: str = "/cube_pose",
                  auto_launch_cube_tracker: bool = False,
                  cube_tracker_camera: str = "kinect2",
-                 cube_tracker_target_frame: str = ""):
+                 cube_tracker_target_frame: str = "",
+                 goal_pose_topic: str = "",
+                 goal_pose_timeout_s: float = 1.0):
 
         """
         variables to keep track of ros port
@@ -454,6 +456,13 @@ class RX200PushEnv(rx200_robot_real.RX200RobotEnv):
                 _tracker_args.append(f"output_topic:={cube_pose_topic}")
             if cube_tracker_target_frame:
                 _tracker_args.append(f"target_frame:={cube_tracker_target_frame}")
+            # If the env is configured for a tag-based goal too, ask the
+            # launch to start the second adapter on the same apriltag_ros
+            # pipeline. Shared apriltag detector + TF chain; one extra node.
+            if goal_pose_topic:
+                _tracker_args.append("enable_goal_tracker:=true")
+                if goal_pose_topic != "/goal_pose":
+                    _tracker_args.append(f"goal_output_topic:={goal_pose_topic}")
             rospy.loginfo(
                 f"[auto-launch] rl_envs_cube_tracker {cube_tracker_camera}.launch "
                 f"{' '.join(_tracker_args) if _tracker_args else '(no extra args)'}"
@@ -474,6 +483,25 @@ class RX200PushEnv(rx200_robot_real.RX200RobotEnv):
             self._cube_pose_callback,
             queue_size=1,
         )
+
+        # Optional second pose topic — a physical "goal" AprilTag stuck on
+        # the desk so the operator can move the push target between
+        # validation episodes without code edits. Empty topic means
+        # "don't subscribe; use the existing random / hard-coded goal".
+        # See _read_latest_goal_pose for the freshness contract.
+        self.goal_pose_topic = goal_pose_topic
+        self.goal_pose_timeout_s = float(goal_pose_timeout_s)
+        self._latest_goal_pose_msg = None
+        self._latest_goal_pose_time = None
+        if self.goal_pose_topic:
+            self.goal_pose_sub = rospy.Subscriber(
+                self.goal_pose_topic,
+                PoseStamped,
+                self._goal_pose_callback,
+                queue_size=1,
+            )
+        else:
+            self.goal_pose_sub = None
 
         # for smoothing
         if self.use_smoothing:
@@ -598,20 +626,21 @@ class RX200PushEnv(rx200_robot_real.RX200RobotEnv):
         self.cube_marker.set_position(position=cube_init_vector)  #  so we can see the cube in rviz
         self.cube_marker.publish()
 
-        # --------------- Random Push Goal
-        if self.random_goal:
+        # --------------- Push goal: tag → random → hard-coded
+        _goal_from_tag = self._read_latest_goal_pose() if self.goal_pose_topic else None
+        if _goal_from_tag is not None:
+            self.push_goal = _goal_from_tag
+            if self.log_internal_state:
+                rospy.loginfo(f"[goal-tag] Using AprilTag goal: {self.push_goal}")
+        elif self.random_goal:
             #  Get a random pos - np.array
             self.push_goal = self.get_random_goal_no_check()
-
-        # if we don't have a random push goal, we can hard code one
         else:
             # fake push goal - hard code one
             # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
             self.push_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
-
-
-        if self.log_internal_state:
-            rospy.logwarn("Hard Coded Push Goal--->" + str(self.push_goal))
+            if self.log_internal_state:
+                rospy.logwarn("Hard Coded Push Goal--->" + str(self.push_goal))
 
         # Publish the goal pos
         self.goal_marker.set_position(position=self.push_goal)
@@ -1582,6 +1611,35 @@ class RX200PushEnv(rx200_robot_real.RX200RobotEnv):
             dtype=np.float32,
         )
         return cube_pos, cube_ori
+
+    def _goal_pose_callback(self, msg):
+        """Subscriber callback for the optional physical-tag goal topic.
+
+        Stores the latest PoseStamped + receipt time so _set_init_pose
+        can decide whether the tag-derived goal is fresh enough to use.
+        Subscription is only active when goal_pose_topic is non-empty.
+        """
+        self._latest_goal_pose_msg = msg
+        self._latest_goal_pose_time = rospy.get_time()
+
+    def _read_latest_goal_pose(self):
+        """Return a 3-vec goal position from the goal tag, or None if stale.
+
+        "Stale" = no message within self.goal_pose_timeout_s seconds. The
+        _set_init_pose caller falls back to random / hard-coded goal in
+        that case. Orientation is ignored for push — only the (x, y, z)
+        target matters.
+        """
+        if self._latest_goal_pose_msg is None or self._latest_goal_pose_time is None:
+            return None
+        age = rospy.get_time() - self._latest_goal_pose_time
+        if age > self.goal_pose_timeout_s:
+            return None
+        pose = self._latest_goal_pose_msg.pose
+        return np.array(
+            [pose.position.x, pose.position.y, pose.position.z],
+            dtype=np.float32,
+        )
 
     # ------------------------------------------------------
     #   Task Methods for launching roscore
