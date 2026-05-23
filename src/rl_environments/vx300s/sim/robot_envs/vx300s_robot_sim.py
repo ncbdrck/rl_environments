@@ -54,11 +54,13 @@ def _prepend_env_path(var: str, path: str) -> None:
 
 try:
     _prepend_env_path("GAZEBO_RESOURCE_PATH", _rp.get_path("interbotix_xsarm_gazebo"))
-except rospkg.common.ResourceNotFound:
+except (rospkg.common.ResourceNotFound, TypeError):
     pass
 try:
-    _prepend_env_path("GAZEBO_MODEL_PATH", _rp.get_path("viperx300s_description") + "/models")
-except rospkg.common.ResourceNotFound:
+    _vx300s_pkg = _rp.get_path("viperx300s_description")
+    if isinstance(_vx300s_pkg, str):
+        _prepend_env_path("GAZEBO_MODEL_PATH", _vx300s_pkg + "/models")
+except (rospkg.common.ResourceNotFound, TypeError):
     pass
 
 

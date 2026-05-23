@@ -56,9 +56,10 @@ def _prepend_env_path(var: str, path: str) -> None:
 
 
 try:
-    _prepend_env_path("GAZEBO_MODEL_PATH",
-                      _rp.get_path("ur5e_description_extras") + "/models")
-except rospkg.common.ResourceNotFound:
+    _ur5e_pkg = _rp.get_path("ur5e_description_extras")
+    if isinstance(_ur5e_pkg, str):
+        _prepend_env_path("GAZEBO_MODEL_PATH", _ur5e_pkg + "/models")
+except (rospkg.common.ResourceNotFound, TypeError):
     pass
 
 

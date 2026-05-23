@@ -74,7 +74,7 @@ chmod +x xsarm_amd64_install.sh
 Use the following instructions to install the Ned2 robot repository.
 
 ```bash
-# Dpownload the ROS workspace
+# Download the ROS workspace
 cd ~/catkin_ws/src
 git clone https://github.com/NiryoRobotics/ned_ros.git
 cd ned_ros
@@ -174,12 +174,27 @@ Follow these steps to install this package:
     git clone https://github.com/ncbdrck/rl_environments.git
     ```
 
-2. Clone supporting packages:
+2. Clone supporting packages (per-robot description extras + the
+   cube-pose tracker used by real push / pick-and-place envs):
     ```shell
     cd ~/catkin_ws/src
-    git clone https://github.com/ncbdrck/reactorx200_description.git
+
+    # Shared sensor models (Kinect v2, ZED 2, etc.)
     git clone https://github.com/ncbdrck/common-sensors.git
+
+    # Per-robot description extras (table, cube, vendor URDF wraps)
+    git clone https://github.com/ncbdrck/reactorx200_description.git
+    git clone https://github.com/ncbdrck/niryo_ned2_description_extras.git
+    git clone https://github.com/ncbdrck/viperx300s_description.git
+    git clone https://github.com/ncbdrck/ur5e_description_extras.git
+
+    # Real-side cube-pose publisher (push / PnP real envs)
+    git clone https://github.com/ncbdrck/rl_envs_cube_tracker.git
     ```
+
+   If you used `install_uniros_stack.sh` to bootstrap the workspace,
+   these are already cloned for you — this list is for users doing a
+   fully manual install.
 
 3. This package relies on several Python packages. You can install them by running the following command:
 
