@@ -60,8 +60,7 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         Actuators Topic List:
             MoveIt: Send the joint positions to the robot.
             /ned2/niryo_robot_follow_joint_trajectory_controller/command: arm trajectory controller.
-            /ned2/gazebo_tool_commander/follow_joint_trajectory: gripper action server (sim-only;
-                niryo_robot_tools_commander is bypassed in sim, see move_gripper_joints).
+            /ned2/gazebo_tool_commander/follow_joint_trajectory: gripper action server (sim-only; niryo_robot_tools_commander is bypassed in sim, see move_gripper_joints).
         """
         rospy.loginfo("Start Init NED2RobotEnv Multiros")
 
