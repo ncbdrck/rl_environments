@@ -58,13 +58,17 @@ Please follow the instructions in the [UniROS repository](https://github.com/ncb
 **Note:** Make sure to check out the `gymnasium` branch of the repositories before making the ros workspace.
 
 
-### 2. Rx200 Robot Repository
+### 2. Trossen (Interbotix) Robot Packages
 
-You can download the official repository of the Rx200 robot from [here](https://github.com/Interbotix/interbotix_ros_manipulators) and follow the instructions to install it.
+Covers the **RX200** and **VX300S** arms (and the rest of the
+Interbotix xseries line). The official Interbotix install script
+clones the full `interbotix_ros_manipulators`,
+`interbotix_ros_toolboxes`, and `interbotix_ros_core` trees, which
+between them provide everything both arms need.
 
-Furthermore, you can also follow the instructions in the [Rx200 Official Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/ros_interface/ros1/software_setup.html) to install the related ros packages.
+Official docs: [Interbotix RX200 software setup](https://docs.trossenrobotics.com/interbotix_xsarms_docs/ros_interface/ros1/software_setup.html).
 
-At the moment, these are the installation instructions for the Rx200 robot with ROS Noetic on Ubuntu 20.04:
+At the moment, these are the installation instructions on Ubuntu 20.04 / ROS Noetic:
 
 ```shell
 sudo apt install curl
@@ -74,10 +78,32 @@ chmod +x xsarm_amd64_install.sh
 ```
 **Note**: This will also install ROS Noetic (if not already installed) and create a new ROS workspace in your home directory if `-p` is not used. So source your workspace accordingly.
 
+### 2a. ViperX-300S sim extras (`viperx300s_description`)
 
-### 3. Ned2 Robot Repository
+For VX300S **simulation** reach envs we use a local description-extras
+package that mirrors the RX200 tabletop setup: ViperX-300S on the cafe
+table, optional red cube, Kinect v2 mount, and `ros_control` controllers
+for Gazebo. Mirrors the role of `reactorx200_description` for the RX200.
 
-Use the following instructions to install the Ned2 robot repository.
+```bash
+cd ~/catkin_ws/src
+git clone https://github.com/ncbdrck/viperx300s_description.git
+cd ~/catkin_ws
+catkin_make
+source devel/setup.bash
+
+# Verify the standalone scene with table + red cube (no RL env):
+roslaunch viperx300s_description vx300s_gazebo.launch load_cube:=true
+```
+
+Not needed for **real** VX300S envs — the Interbotix driver handles
+hardware bring-up.
+
+
+### 3. Niryo Robot Packages
+
+Covers the **Ned2** arm. Niryo's `ned_ros` package brings up the
+Ned2 driver, the onboard ROS interface, and the simulation support.
 
 ```bash
 # Download the ROS workspace
@@ -122,28 +148,44 @@ roslaunch niryo_ned2_description_extras ned2_gazebo.launch gripper:=true  # pnp
 Not needed for **real** Ned2 envs — those bring up the Niryo driver
 via `niryo_robot_bringup` instead.
 
-### 3b. ViperX-300S sim extras (`viperx300s_description`)
+### 4. Universal Robots Packages
 
-For VX300S **simulation** reach envs we use a local description-extras
-package that mirrors the RX200 tabletop setup: ViperX-300S on the cafe
-table, optional red cube, Kinect v2 mount, and `ros_control` controllers
-for Gazebo. Mirrors the role of `reactorx200_description` for the RX200.
+Covers the **UR5e** arm + Robotiq 2F-85 gripper. Three source clones
+plus an apt install. None of these are in the Ubuntu / ROS apt
+mirror, so `rosdep` can't resolve them — they must be cloned
+manually (or via `install_uniros_stack.sh`, which does it for you).
 
 ```bash
 cd ~/catkin_ws/src
-git clone https://github.com/ncbdrck/viperx300s_description.git
+
+# UR5e URDF + meshes (ROS-Industrial)
+git clone -b noetic-devel https://github.com/ros-industrial/universal_robot.git
+
+# Robotiq 2F-85 gripper (the filesmuggler fork — upstream
+# ros-industrial/robotiq doesn't ship robotiq_description for the
+# 2F-85)
+git clone https://github.com/filesmuggler/robotiq.git
+
+# MoveIt config (used by ur5e_description_extras's launch files)
+git clone https://github.com/ncbdrck/ur5e_robotiq_85_moveit_config.git
+
 cd ~/catkin_ws
 catkin_make
 source devel/setup.bash
-
-# Verify the standalone scene with table + red cube (no RL env):
-roslaunch viperx300s_description vx300s_gazebo.launch load_cube:=true
 ```
 
-Not needed for **real** VX300S envs — the Interbotix driver handles
-hardware bring-up.
+For **real** UR5e hardware, also install the UR driver:
 
-### 3c. UR5e sim extras (`ur5e_description_extras`)
+```bash
+sudo apt install ros-noetic-ur-robot-driver ros-noetic-ur-calibration
+```
+
+### 4a. UR5e sim extras (`ur5e_description_extras`)
+
+Install §4 first — `ur5e_description_extras` depends on `ur_e_description`
+(from `universal_robot`), `robotiq_description` (from the Robotiq
+fork), and `ur5e_robotiq_85_moveit_config`. Without those three
+in the workspace, the build / launch will fail.
 
 For UR5e **simulation** envs we ship a local description-extras
 package that wraps the upstream UR5e + Robotiq 2F-85 URDF, mounts the
@@ -193,6 +235,9 @@ Follow these steps to install this package:
     git clone https://github.com/ncbdrck/niryo_ned2_description_extras.git
     git clone https://github.com/ncbdrck/viperx300s_description.git
     git clone https://github.com/ncbdrck/ur5e_description_extras.git
+
+    # UR5e + Robotiq MoveIt config (used by ur5e_description_extras)
+    git clone https://github.com/ncbdrck/ur5e_robotiq_85_moveit_config.git
 
     # Real-side cube-pose publisher (push / PnP real envs)
     git clone https://github.com/ncbdrck/rl_envs_cube_tracker.git
