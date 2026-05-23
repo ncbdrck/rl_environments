@@ -19,7 +19,11 @@ rx200: #namespace
       - 2.14  # wrist_angle
       - 3.12  # wrist_rotate
 
-    # Define the minimum and maximum joint values for grasping (not used for the push task as we don't grasp)
+    # Define the minimum and maximum joint values for grasping. Not used by
+    # the push mixin (push uses the closed gripper as a flat pusher; we
+    # never command finger joints). Kept here so the YAML shape matches
+    # reach / pnp configs and any shared loader iterating over robots
+    # works without special-casing push.
     min_joint_pos_grasp:
       - -3.12  # waist
       - -1.88  # shoulder
@@ -47,7 +51,9 @@ rx200: #namespace
     position_ee_min: # Minimum XYZ position for the EE
       x: -0.55
       y: -0.55
-      z: -0.55  # Near zero to prevent going below the table
+      z: -0.55  # Loose obs bound so transient sim states don't trip gymnasium's
+                # obs-not-in-space warning. The actual table floor is enforced
+                # by workspace_min.z + the per-link FK safety check, not here.
 
     rpy_ee_max: # Maximum roll, pitch, and yaw (RPY) values for the EE
       r: 6.2832
@@ -75,6 +81,42 @@ rx200: #namespace
       r: -6.28
       p: -6.28
       y: -6.28
+
+    # Cube velocities — finite-differenced from cube pose (sim and real
+    # share the same code path; no Gazebo-specific twist API needed).
+    # ±2 m/s leaves slack for transient sim spikes; a pushed cube
+    # typically slides at <1 m/s.
+    linear_velocity_cube_max:
+      x: 2.0
+      y: 2.0
+      z: 2.0
+    linear_velocity_cube_min:
+      x: -2.0
+      y: -2.0
+      z: -2.0
+
+    # Angular velocity in rad/s. ±20 covers a tumbling/spinning cube
+    # under push contact; nominal pushing rarely exceeds a few rad/s.
+    angular_velocity_cube_max:
+      r: 20.0
+      p: 20.0
+      y: 20.0
+    angular_velocity_cube_min:
+      r: -20.0
+      p: -20.0
+      y: -20.0
+
+    # Cube position relative to the EE (cube_pos - ee_pos). Bounds
+    # derived from workspace span — cube can be anywhere reachable
+    # relative to the EE.
+    cube_rel_to_ee_max:
+      x: 1.10
+      y: 1.10
+      z: 1.10
+    cube_rel_to_ee_min:
+      x: -1.10
+      y: -1.10
+      z: -1.10
 
     # not used in this task (so values are not set)
     linear_distance_max: # Maximum distance from cube to the desired goal (spans 110cm)
@@ -143,25 +185,28 @@ rx200: #namespace
       x: 0.55
       y: 0.55
       z: 0.55
-    workspace_min: # Minimum XYZ position for the workspace
+    workspace_min: # Minimum XYZ position for the workspace (active EE/link safety floor)
       x: 0.10
       y: -0.55
-      z: 0.06  # Near zero to prevent going below the table (# todo: check this value)
+      z: 0.06  # EE floor for push: higher than reach because the EE pushes a
+               # 2 cm cube sitting on the table; needs gripper-tip clearance.
 
 
     # ******** achieved_goal and desired_goal
-
-    # In this task this is the EE pose
-    position_achieved_goal_max: # Maximum XYZ position for the achieved_goal
+    # Push semantics: the achieved_goal tracks the CUBE pose, not the EE.
+    # The cube sits on the table at z ≈ 0.015 (half its 0.02 m edge above
+    # the table surface), so achieved/desired z floors are intentionally
+    # below workspace_min.z (which constrains the arm, not the cube).
+    position_achieved_goal_max: # Maximum XYZ position for the cube
       x: 0.55
       y: 0.55
       z: 0.55
-    position_achieved_goal_min: # Minimum XYZ position for the achieved_goal
+    position_achieved_goal_min: # Minimum XYZ position for the cube
       x: -0.55
       y: -0.55
-      z: 0.05  # Near zero to prevent going below the table
+      z: 0.005  # half a cube-edge above the table
 
-    # In this task, this is the same as goal
+    # In this task, this is the same as goal-sampling range.
     position_desired_goal_max: # Maximum XYZ position for the desired_goal
       x: 0.40
       y: 0.40
@@ -169,7 +214,7 @@ rx200: #namespace
     position_desired_goal_min: # Minimum XYZ position for the desired_goal
       x: 0.15
       y: -0.40
-      z: 0.05
+      z: 0.005
 
 
     # ******** Gazebo Simulation parameters
@@ -180,6 +225,17 @@ rx200: #namespace
     # above 1.0 lets physics outpace the agent's wall-clock-paced control
     # loop, which breaks behaviour.
     gazebo_update_rate_multiplier: 1.0
+
+
+    # ******** Real-side cube tracking (consumed by RX200PushReal /
+    # RX200PushGoalReal). Real envs subscribe to a vision pipeline
+    # that publishes geometry_msgs/PoseStamped on ``cube_pose_topic``.
+    # If no message arrives within cube_pose_timeout_s, the env falls
+    # back to ``cube_init_pos`` and emits a throttled warning. The
+    # fallback path keeps the env constructible during dry-runs /
+    # code review even when no vision pipeline is wired up.
+    cube_pose_timeout_s: 1.0
+    cube_init_pos: [0.25, 0.0, 0.015]
 
 
     # ******** Tolerance for the position of the goal
@@ -193,4 +249,16 @@ rx200: #namespace
     joint_limits_reward: -2.0
     none_exe_reward: -5.0
     not_within_goal_space_reward: -2.0
+
+
+    # ******** Safety (consumed by RX200RobotEnv per-link FK check)
+    # Same defaults as rx200_reach_task_config.yaml. See that file for the
+    # rationale on each value.
+    table_z: -0.005
+    safety_z_margin: 0.015
+    safety_z_margin_strict: 0.030
+    max_joint_delta: 0.5
+    max_joint_delta_strict: 0.15
+    joint_state_timeout_s: 0.5
+    ee_pose_timeout_s: 0.5
 

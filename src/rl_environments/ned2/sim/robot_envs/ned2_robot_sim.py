@@ -12,7 +12,7 @@ from sensor_msgs.msg import JointState, PointCloud2, Image
 from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from niryo_robot_tools_commander.msg import ToolAction, ToolGoal, ToolCommand
+from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryGoal
 import actionlib
 
 from cv_bridge import CvBridge
@@ -31,16 +31,6 @@ from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
 from tf.transformations import euler_from_matrix, euler_from_quaternion
 
-"""
-Although it is best to register only the task environment, one can also register the robot environment. 
-This is not necessary, but we can see if this section 
-(Load the robot to gazebo and can control the robot with moveit or ros controllers)
-works by calling "gymnasium.make" this env.
-but you need to
-    1. run gazebo - gazebo_core.launch_gazebo(launch_roscore=False, paused=False, pub_clock_frequency=100, gui=True)
-    2. init a node - rospy.init_node('test_MyRobotGoalEnv')
-    3. gymnasium.make("NED2RobotEnv-v0")
-"""
 register(
     id='NED2RobotEnv-v0',
     entry_point='rl_environments.ned2.sim.robot_envs.ned2_robot_sim:NED2RobotEnv',
@@ -55,7 +45,8 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
     def __init__(self, ros_port: str = None, gazebo_port: str = None, gazebo_pid=None, seed: int = None,
                  real_time: bool = False, action_cycle_time=0.0, load_cube: bool = False, load_table: bool = False,
-                 use_camera: bool = False, gripper: bool = False):
+                 use_camera: bool = False, use_wrist_camera: bool = False,
+                 gripper: bool = False):
         """
         Initializes a new Robot Environment
 
@@ -68,20 +59,15 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         Actuators Topic List:
             MoveIt: Send the joint positions to the robot.
-            /ned2/niryo_robot_follow_joint_trajectory_controller/command: Send the joint positions to the robot.
-            /ned2/niryo_robot_tools_commander/action_server: Action server to control the robot tools.
+            /ned2/niryo_robot_follow_joint_trajectory_controller/command: arm trajectory controller.
+            /ned2/gazebo_tool_commander/follow_joint_trajectory: gripper action server (sim-only;
+                niryo_robot_tools_commander is bypassed in sim, see move_gripper_joints).
         """
         rospy.loginfo("Start Init NED2RobotEnv Multiros")
 
-        """
-        Change the ros/gazebo master
-        """
         if ros_port is not None:
             ros_common.change_ros_gazebo_master(ros_port=ros_port, gazebo_port=gazebo_port)
 
-        """
-        parameters
-        """
         self.gripper = gripper
         self.real_time = real_time  # if True, the simulation will run in real time
 
@@ -91,27 +77,33 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         else:
             unpause_pause_physics = True
 
-        """
-        Unpause Gazebo
-        """
         if not self.real_time:
             gazebo_core.unpause_gazebo()
 
-        """
-        Spawning the robot in Gazebo
-        """
         spawn_robot = True
 
-        # location of the robot URDF file
-        urdf_pkg_name = "niryo_robot_description"
-        urdf_file_name = "niryo_ned2_gazebo.urdf.xacro" if not gripper else "niryo_ned2_gripper1_n_camera.urdf"
-        urdf_folder = "/urdf/ned2"
+        # Location of the robot URDF file.
+        # Loaded from niryo_ned2_description_extras (sibling sim package
+        # — see rl_environments/README.md §3a) which wraps Niryo's
+        # upstream URDF + adds head-mount Kinect v2 (so /head_mount_kinect2/*
+        # subscribers actually receive data in sim) + Niryo's built-in
+        # wrist camera. Two variants:
+        #   ned2_kinect.urdf.xacro          → arm + kinect2 + wrist cam.
+        #   ned2_kinect_gripper.urdf.xacro  → arm + adaptive gripper +
+        #                                     kinect2 + wrist cam +
+        #                                     mors transmissions.
+        urdf_pkg_name = "niryo_ned2_description_extras"
+        urdf_file_name = "ned2_kinect.urdf.xacro" if not gripper else "ned2_kinect_gripper.urdf.xacro"
+        urdf_folder = "/urdf"
 
         # extra urdf args
         urdf_xacro_args = None
 
-        # namespace of the robot
-        namespace = "ned2"
+        # namespace of the robot. Keep the leading slash — without it,
+        # rostopic.get_topic_type("ned2/joint_states", blocking=True)
+        # does an exact string match against the master's "/ned2/joint_states"
+        # and the readiness check spins forever. Matches goal_sim + RX200.
+        namespace = "/ned2"
 
         # robot state publisher
         robot_state_publisher_max_freq = None
@@ -129,15 +121,16 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         robot_ori_y = 0.0
         robot_ori_z = 0.0
 
-        # controller (must be inside above pkg_name/config/)
-        controller_package_name = "rl_environments"
-        controllers_file = "ned2_ros_controllers.yaml"
+        # Controllers config — loaded from niryo_ned2_description_extras
+        # (single source of truth for both standalone roslaunch testing
+        # and RL env runtime). Two variants:
+        #   ned2_controllers.yaml            → joint_state + arm trajectory
+        #   ned2_controllers_w_gripper.yaml  → + gazebo_tool_commander + mors PID
+        controller_package_name = "niryo_ned2_description_extras"
+        controllers_file = "ned2_controllers.yaml" if not gripper else "ned2_controllers_w_gripper.yaml"
         controllers_list = ["joint_state_controller", "niryo_robot_follow_joint_trajectory_controller"] if not gripper else \
             ["joint_state_controller", "niryo_robot_follow_joint_trajectory_controller", "gazebo_tool_commander"]
 
-        """
-        Spawn other objects in Gazebo
-        """
         # spawn a table
         self.load_table = load_table
 
@@ -164,37 +157,13 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
             if self.real_time:
                 gazebo_core.unpause_gazebo()
 
-        """
-        Set if the controllers in "controller_list" will be reset at the beginning of each episode, default is False.
-        """
         reset_controllers = False
 
-        """
-        Set the reset mode of gazebo at the beginning of each episode
-            "simulation": Reset gazebo simulation (Resets time) 
-            "world": Reset Gazebo world (Does not reset time) - default
-
-        resetting the "simulation" restarts the entire Gazebo environment, including all models and their positions, 
-        while resetting the "world" retains the models but resets their properties and states within the world        
-        """
         reset_mode = "world"
 
-        """
-        You can adjust the simulation step mode of Gazebo with two options:
-
-            1. Using Unpause, set action and Pause gazebo
-            2. Using the step function of Gazebo.
-
-        By default, the simulation step mode is set to 1 (gazebo pause and unpause services). 
-        However, if you choose simulation step mode 2, you can specify the number of steps Gazebo should take in each 
-        iteration. The default value for this is 1.
-        """
         sim_step_mode = 1
         num_gazebo_steps = 1
 
-        """
-        Set gazebo physics parameters to change the speed of the simulation
-        """
         gazebo_max_update_rate = None
         gazebo_timestep = None
 
@@ -206,24 +175,26 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
             gazebo_timestep = rospy.get_param('/ned2/gazebo_time_step')
             rospy.loginfo(f"Applied Gazebo time_step = {gazebo_timestep}")
 
-        """
-        kill rosmaster at the end of the env
-        """
         kill_rosmaster = True
 
-        """
-        kill gazebo at the end of the env
-        """
         kill_gazebo = True
 
-        """
-        Clean ros Logs at the end of the env
-        """
         clean_logs = False
 
-        """
-        Init GazeboBaseEnv.
-        """
+        # Pre-load controllers YAML (with PID gains) under /ned2 BEFORE
+        # gazebo spawns the model. The gazebo_ros_control plugin reads
+        # /ned2/gazebo_ros_control/pid_gains/joint_* at plugin-init time
+        # (when the model is spawned). multiros's spawn_robot_in_gazebo
+        # loads the controllers YAML AFTER spawn, which is too late —
+        # the plugin has already given up and logged "No p gain
+        # specified for pid". Without PIDs the arm sags under gravity
+        # and MoveIt can't converge, taking down the third xterm.
+        ros_common.ros_load_yaml(
+            pkg_name=controller_package_name,
+            file_name=controllers_file,
+            ns="/" + namespace.lstrip("/"),
+        )
+
         super().__init__(
             spawn_robot=spawn_robot, urdf_pkg_name=urdf_pkg_name, urdf_file_name=urdf_file_name,
             urdf_folder=urdf_folder, urdf_xacro_args=urdf_xacro_args, namespace=namespace,
@@ -239,9 +210,6 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
             unpause_pause_physics=unpause_pause_physics, action_cycle_time=action_cycle_time,
             controller_package_name=controller_package_name)
 
-        """
-        Define ros publisher, subscribers and services for robot and sensors
-        """
         # ---------- joint state
         if namespace is not None and namespace != '/':
             self.joint_state_topic = namespace + "/joint_states"
@@ -252,18 +220,21 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         self.joint_state = JointState()
 
         # ---------- Moveit
-        if not gripper:
-            ros_common.ros_launch_launcher(pkg_name="niryo_moveit_config_standalone",
-                                           launch_file_name="move_group.launch",
-                                           args=["hardware_version:=ned2", "simulation_mode:=true",
-                                                 "load_robot_description:=false"
-                                                 ])
-        else:
-            ros_common.ros_launch_launcher(pkg_name="niryo_moveit_config_w_gripper1",
-                                           launch_file_name="move_group.launch",
-                                           args=["hardware_version:=ned2", "simulation_mode:=true",
-                                                 "load_robot_description:=false"
-                                                 ])
+        # Use the description-extras wrapper, which includes Niryo's
+        # move_group.launch under <group ns="ned2"> so move_group ends
+        # up at /ned2/move_group/... and MoveitMultiros(ns="ned2") can
+        # find its action servers. Without the wrap, Niryo's launch
+        # runs at root and the env hangs on the readiness check.
+        ros_common.ros_launch_launcher(
+            pkg_name="niryo_ned2_description_extras",
+            launch_file_name="ned2_move_group.launch",
+            args=[
+                "hardware_version:=ned2",
+                "simulation_mode:=true",
+                "load_robot_description:=false",
+                f"gripper:={'true' if gripper else 'false'}",
+            ],
+        )
 
         # ---------- kinect
         self.use_camera = use_camera
@@ -282,16 +253,22 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
             self.kinect_rgb = Image()
             self.cv_image_rgb = None
 
-        """
-        Using the _check_connection_and_readiness method to check for the connection status of subscribers, publishers 
-        and services
-        """
+        # ---------- Niryo's built-in wrist camera (opt-in, default off).
+        # niryo_ned2_description_extras loads niryo_ned2_camera.urdf.xacro
+        # which puts a Gazebo camera plugin on `camera_link` (wrist-
+        # mounted). Topics published by the plugin: /gazebo_camera/image_raw
+        # (sensor_msgs/Image) and /gazebo_camera/camera_info.
+        # Useful for EE-mounted perception studies / PnP close-up obs.
+        self.use_wrist_camera = use_wrist_camera
+
+        if self.use_wrist_camera:
+            self.wrist_camera_rgb_sub = rospy.Subscriber("/gazebo_camera/image_raw", Image,
+                                                          self.wrist_camera_rgb_callback)
+            self.wrist_camera_rgb = Image()
+            self.cv_image_wrist = None
 
         self._check_connection_and_readiness()
 
-        """
-        initialise controller and sensor objects here
-        """
         self.arm_joint_names = ["joint_1",
                                 "joint_2",
                                 "joint_3",
@@ -319,8 +296,15 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                                                       queue_size=10)
 
         # parameters for calculating FK, IK
-        self.ee_link = "ned2/wrist_link"
-        self.ref_frame = "ned2/base_link"
+        # tool_link, not wrist_link: the action vector has 6 joint values
+        # (NED2 is 6-DOF), but base_link → wrist_link is a 5-joint chain
+        # (joint_1..joint_5). KDL needs len(q) == subchain joints, so an
+        # ee_link with 6 joints in the chain is required. tool_link is
+        # also what Niryo's SRDF declares as the planning-group EE
+        # (group "arm" ends at tool_link), so this aligns FK with the
+        # MoveIt planning target.
+        self.ee_link = "tool_link"
+        self.ref_frame = "base_link"
 
         # Fk with pykdl_utils - old method
         self.pykdl_robot = URDF.from_parameter_server(key='ned2/robot_description')
@@ -331,9 +315,28 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
                                                          base_link=self.ref_frame,
                                                          end_link=self.ee_link)
 
-        """
-        Finished __init__ method
-        """
+        # Per-link FK chains for the safety check in _check_action_links_safe.
+        # See RX200RobotEnv (d8b5517) for the full rationale — short version:
+        # PyKDL's ChainFkSolverPos_recursive expects len(q) to match the
+        # *subchain* joint count, not the full arm DOF. Caching one
+        # KDLKinematics per check-link lets us slice q[:n] correctly.
+        #
+        # Diagnostic logging: print BEFORE each KDLKinematics build so a
+        # hang in the pykdl C extension surfaces the offending link name
+        # in the log (try/except can't catch a C-level hang). Removed
+        # once the link list is verified working on each robot.
+        self._safety_kin = {}
+        for _link in self.SAFETY_CHECK_LINKS:
+            rospy.loginfo(f"[SAFETY] building kinematics for {_link} ...")
+            try:
+                _kin = KDLKinematics(urdf=self.pykdl_robot,
+                                     base_link=self.ref_frame,
+                                     end_link=_link)
+                self._safety_kin[_link] = (_kin, int(_kin.num_joints))
+                rospy.loginfo(f"[SAFETY] {_link} ok ({_kin.num_joints} joints)")
+            except Exception as _e:
+                rospy.logwarn(f"[SAFETY] kinematics setup failed for {_link}: {_e}")
+
         if not self.real_time:
             gazebo_core.pause_gazebo()
         else:
@@ -342,30 +345,6 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
     # ---------------------------------------------------
     #   Custom methods for the Custom Robot Environment
-
-    """
-    Define the custom methods for the environment
-        * get_model_pose: Get the pose of an object in Gazebo
-        * spawn_cube_in_gazebo: Spawn a cube in Gazebo
-        * remove_cube_in_gazebo: Remove the cube from Gazebo
-        * fk_pykdl: Function to calculate the forward kinematics of the robot arm. We are using pykdl_utils.
-        * calculate_fk: Calculate the forward kinematics of the robot arm using the ros_kinematics package.
-        * calculate_ik: Calculate the inverse kinematics of the robot arm using the ros_kinematics package.
-        * joint_state_callback: Get the joint state of the robot
-        * move_arm_joints: Set a joint position target only for the arm joints using low-level ros controllers.
-        * move_gripper_joints: Set a joint position target only for the gripper joints using low-level ros controllers.
-        * smooth_trajectory: Smooth the trajectory by interpolating between the current and target positions.
-        * publish_trajectory: Publish the entire trajectory at once.
-        * set_trajectory_joints: Set a joint position target only for the arm joints.
-        * set_trajectory_ee: Set a pose target for the end effector of the robot arm.
-        * get_ee_pose: Get end-effector pose a geometry_msgs/PoseStamped message
-        * get_ee_rpy: Get end-effector orientation as a list of roll, pitch, and yaw angles.
-        * get_joint_angles: Get current joint angles of the robot arm - 5 elements
-        * check_goal: Check if the goal is reachable
-        * check_goal_reachable_joint_pos: Check if the goal is reachable with joint positions
-        * kinect_depth_callback: Callback function for kinect depth sensor
-        * kinect_rgb_callback: Callback function for kinect rgb sensor
-    """
 
     def get_model_pose(self, model_name="red_cube", rpy=True):
         """
@@ -385,6 +364,10 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
             gazebo_core.unpause_gazebo()
 
         # pose is a geometry_msgs/Pose Message
+        # relative_entity_name uses Gazebo's "<model>/<link>" convention
+        # (mirrors RX200's "rx200/base_link"). NOT a URDF link name — the
+        # URDF links are bare (base_link, wrist_link, ...) but Gazebo's
+        # link-state lookup needs the model-qualified form.
         header, pose, twist, success = gazebo_models.gazebo_get_model_state(model_name=model_name,
                                                                             relative_entity_name="ned2/base_link")
 
@@ -433,7 +416,7 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         # spawn a cube
         done = gazebo_models.spawn_sdf_model_gazebo(pkg_name="reactorx200_description", file_name="block.sdf",
                                                     model_folder="/models/block",
-                                                    model_name="red_cube", namespace="/rx200",
+                                                    model_name="red_cube", namespace="/ned2",
                                                     pos_x=model_pos_x,
                                                     pos_y=model_pos_y,
                                                     pos_z=model_pos_z)
@@ -495,6 +478,80 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         done, ee_position, ee_ori = self.ros_kin.calculate_fk(joint_positions, des_frame=self.ee_link, euler=euler)
 
         return done, ee_position, ee_ori
+
+    # Arm links whose world z must stay above the table/ground for the
+    # action to be safe. Order matches the URDF chain shoulder→tool.
+    # joint5_motor (small fixed mounting link) and hand_link (downstream
+    # of wrist via fixed joints) are skipped — checking wrist_link and
+    # tool_link covers everything they bracket.
+    SAFETY_CHECK_LINKS = (
+        "shoulder_link",
+        "arm_link",
+        "elbow_link",
+        "forearm_link",
+        "wrist_link",
+        "tool_link",
+    )
+
+    def _check_action_links_safe(self, joint_targets, current_joints=None):
+        """
+        Predict each arm link's world z under ``joint_targets`` and reject
+        the action if any link would dip below ``table_z + safety_z_margin``.
+        Also caps |target - current| per joint at ``max_joint_delta``.
+
+        Mirrors RX200RobotEnv._check_action_links_safe (d8b5517) for Ned2.
+        See that method's docstring for the design rationale.
+
+        Rosparams (all under ``/ned2/``, with sim/real variants where the
+        real value should be tighter):
+          table_z, safety_z_margin[_real], max_joint_delta[_real]
+
+        Returns
+        -------
+        (safe, reason) : (bool, Optional[str])
+        """
+        strict = bool(getattr(self, "enable_strict_safety", False))
+        table_z = float(rospy.get_param("/ned2/table_z", -0.005))
+        if strict:
+            margin = float(rospy.get_param("/ned2/safety_z_margin_strict", 0.030))
+            max_delta = float(rospy.get_param("/ned2/max_joint_delta_strict", 0.15))
+        else:
+            margin = float(rospy.get_param("/ned2/safety_z_margin", 0.015))
+            max_delta = float(rospy.get_param("/ned2/max_joint_delta", 0.5))
+        floor = table_z + margin
+
+        q = np.asarray(joint_targets, dtype=np.float64)
+
+        # Per-joint delta cap (skipped when current pose is unknown).
+        if current_joints is not None:
+            cur = np.asarray(current_joints, dtype=np.float64)
+            if cur.shape == q.shape:
+                deltas = np.abs(q - cur)
+                if np.any(deltas > max_delta):
+                    idx = int(np.argmax(deltas))
+                    return False, f"joint[{idx}] delta {deltas[idx]:.3f} > {max_delta}"
+
+        # Per-link z check via cached pykdl subchains.
+        per_link_z = []
+        for link, (kin, n) in self._safety_kin.items():
+            try:
+                pose = kin.forward(q[:n])
+            except Exception as e:
+                return False, f"FK failed for {link}: {e}"
+            z = float(pose[2, 3])
+            per_link_z.append((link, z))
+            if z < floor:
+                return False, f"{link} predicted z={z:.3f} < floor={floor:.3f}"
+
+        # First-3-calls debug log — same idiom as RX200 (cd5d930).
+        if not hasattr(self, "_safety_log_count"):
+            self._safety_log_count = 0
+        if self._safety_log_count < 3:
+            self._safety_log_count += 1
+            zs = ", ".join(f"{l.rsplit('/', 1)[-1]}={z:.3f}" for l, z in per_link_z)
+            rospy.loginfo(f"[SAFETY] call #{self._safety_log_count}: floor={floor:.3f}, {zs}")
+
+        return True, None
 
     def calculate_ik(self, target_pos, ee_ori=np.array([0.0, 0.0, 0.0, 1.0])):
         """
@@ -566,34 +623,75 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
         return True
 
+    # Mors prismatic limits (URDF: ±0.01 m). Used to construct the
+    # "fully open" / "fully closed" trajectory points for sim, where
+    # we drive gazebo_tool_commander directly instead of routing
+    # through Niryo's tool_commander_node (which we don't launch in
+    # sim — keeps the bring-up to gazebo + ros_control only).
+    _MORS_OPEN_POS = 0.01
+    _MORS_CLOSED_POS = -0.01
+    _MORS_MOVE_SECS = 1.0  # time_from_start for the trajectory point
+
     def move_gripper_joints(self, action: str) -> bool:
         """
-        Set a joint position target only for the gripper joints using low-level ros controllers. - ros action server
+        Drive the gripper to "open" or "close" (binary, same API the
+        real env exposes via niryo_robot_tools_commander).
+
+        Sim path: publish a JointTrajectory to
+        ``/gazebo_tool_commander/follow_joint_trajectory`` (the
+        effort-based controller our description-extras package brings
+        up). Niryo's tool_commander_node isn't running in sim, so we
+        bypass it and command the mors joints directly. The action
+        server contract is identical to what the real env's
+        tool_commander → effort controller would resolve to internally.
 
         Args:
-            action: "open" or "close" the gripper
+            action: "open" or "close".
 
         Returns:
-            True if the action is successful
+            True if the action server returned a result (success or
+            otherwise — the env treats "trajectory dispatched" as the
+            success condition, matching the real-side semantics).
         """
+        target = self._MORS_OPEN_POS if action == "open" else self._MORS_CLOSED_POS
 
-        # for the gripper
-        gripper_action_client = actionlib.SimpleActionClient('/ned2/niryo_robot_tools_commander/action_server',
-                                                                  ToolAction)
+        # Namespace must match where multiros spawned the controller —
+        # controllers are loaded under /ned2 (see controllers_list), so
+        # gazebo_tool_commander's action server lives at
+        # /ned2/gazebo_tool_commander/follow_joint_trajectory, NOT at
+        # /gazebo_tool_commander/... wait_for_server with no timeout
+        # would hang env.reset() forever if the path is wrong.
+        client = actionlib.SimpleActionClient(
+            '/ned2/gazebo_tool_commander/follow_joint_trajectory',
+            FollowJointTrajectoryAction,
+        )
+        if not client.wait_for_server(timeout=rospy.Duration(10.0)):
+            rospy.logerr(
+                "[NED2] gazebo_tool_commander action server not reachable at "
+                "/ned2/gazebo_tool_commander/follow_joint_trajectory after 10 s. "
+                "Check that controllers_list included gazebo_tool_commander "
+                "and that ned2_controllers_w_gripper.yaml loaded under /ned2."
+            )
+            return False
 
-        # wait for the action server to start
-        gripper_action_client.wait_for_server()
+        goal = FollowJointTrajectoryGoal()
+        goal.trajectory = JointTrajectory()
+        goal.trajectory.joint_names = list(self.gripper_joint_names)
+        point = JointTrajectoryPoint()
+        point.positions = [target, target]
+        point.velocities = [0.0, 0.0]
+        point.accelerations = [0.0, 0.0]
+        point.time_from_start = rospy.Duration(self._MORS_MOVE_SECS)
+        goal.trajectory.points.append(point)
 
-        # create a ToolGoal object
-        tool_goal = ToolGoal()
-        tool_goal.cmd.tool_id = 11  # gripper tool id (normal gripper)
-        tool_goal.cmd.cmd_type = ToolCommand.OPEN_GRIPPER if action == "open" else ToolCommand.CLOSE_GRIPPER
-
-        # send the goal to the action server
-        gripper_action_client.send_goal(tool_goal)
-        # wait for the action to complete
-        gripper_action_client.wait_for_result()
-
+        client.send_goal(goal)
+        # Bounded wait so a stuck controller surfaces in logs rather than
+        # silently freezing env.step / env.reset.
+        if not client.wait_for_result(timeout=rospy.Duration(self._MORS_MOVE_SECS + 3.0)):
+            rospy.logwarn(
+                f"[NED2] gripper '{action}' trajectory did not return a "
+                f"result within {self._MORS_MOVE_SECS + 3.0:.1f} s; continuing."
+            )
         return True
 
     def smooth_trajectory(self, q_positions, time_from_start, multiplier=100):
@@ -677,7 +775,7 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
 
     def get_joint_angles(self):
         """
-        get current joint angles of the robot arm - 5 elements
+        get current joint angles of the robot arm - 6 elements
         Returns a list
         """
         return self.move_NED2_object.get_joint_angles_robot_arm()
@@ -723,6 +821,17 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         # print("Shape of rgb:", cv_image_rgb.shape)  # for debugging
         # todo: for the CNN policy
         # (480, 640, 3) - for pytorch, this needs to be converted to (3, 480, 640)
+
+    def wrist_camera_rgb_callback(self, img_msg):
+        """
+        Callback for Niryo's built-in wrist camera (sim, on `camera_link`).
+        Topic: /gazebo_camera/image_raw — sensor_msgs/Image. Converts to
+        an OpenCV RGB numpy array on self.cv_image_wrist.
+        """
+        self.wrist_camera_rgb = img_msg
+        bridge = CvBridge()
+        cv_image_bgr = bridge.imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
+        self.cv_image_wrist = cv2.cvtColor(cv_image_bgr, cv2.COLOR_BGR2RGB)
 
     # helper fn for _check_connection_and_readiness
     def _check_joint_states_ready(self):

@@ -25,14 +25,6 @@ from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
 from tf.transformations import euler_from_matrix
 
-"""
-Although it is best to register only the task environment, one can also register the robot environment. 
-This is not necessary, but we can see if this section 
-works by calling "gymnasium.make" this env.
-but you need to
-    1. init a node - rospy.init_node('test_MyRobotGoalEnv')
-    2. gymnasium.make("RX200RobotGoalEnv-v0")
-"""
 register(
     id='RX200RobotGoalEnv-v0',
     entry_point='rl_environments.rx200.real.robot_envs.rx200_robot_goal_real:RX200RobotGoalEnv',
@@ -65,20 +57,10 @@ class RX200RobotGoalEnv(RealGoalEnv.RealGoalEnv):
         """
         rospy.loginfo("Start Init RX200RobotGoalEnv RealROS")
 
-        """
-        Change the ros master
-        """
         if ros_port is not None:
             ros_common.change_ros_master(ros_port=ros_port)
 
-        """
-        parameters
-        """
         # none for now
-
-        """
-        Launch a roslaunch file that will setup the connection with the real robot 
-        """
 
         load_robot = True
         robot_pkg_name = "interbotix_xsarm_moveit_interface"
@@ -86,32 +68,17 @@ class RX200RobotGoalEnv(RealGoalEnv.RealGoalEnv):
         robot_args = ["robot_model:=rx200", "use_actual:=true", "dof:=5", "use_python_interface:=true",
                       "use_moveit_rviz:=true"]
 
-        """
-        namespace of the robot
-        """
         namespace = "/rx200"
 
-        """
-        kill rosmaster at the end of the env
-        """
         kill_rosmaster = False
 
-        """
-        Clean ros Logs at the end of the env
-        """
         clean_logs = True
 
-        """
-        Init MyRobotGoalEnv.
-        """
         super().__init__(
             load_robot=load_robot, robot_pkg_name=robot_pkg_name, robot_launch_file=robot_launch_file,
             robot_args=robot_args, namespace=namespace, kill_rosmaster=kill_rosmaster, clean_logs=clean_logs,
             ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt, action_cycle_time=action_cycle_time)
 
-        """
-        initialise controller and sensor objects here
-        """
         # ---------- joint state
         if namespace is not None and namespace != '/':
             self.joint_state_topic = namespace + "/joint_states"
@@ -159,10 +126,6 @@ class RX200RobotGoalEnv(RealGoalEnv.RealGoalEnv):
             self.zed2_rgb = Image()
             self.cv_image_rgb = None
 
-        """
-        Using the _check_connection_and_readiness method to check for the connection status of subscribers, publishers 
-        and services
-        """
         self._check_connection_and_readiness()
 
         # For ROS Controllers
@@ -199,36 +162,35 @@ class RX200RobotGoalEnv(RealGoalEnv.RealGoalEnv):
                                                          base_link=self.ref_frame,
                                                          end_link=self.ee_link)
 
-        """
-        Finished __init__ method
-        """
+        # Strict-safety flag — _check_action_links_safe picks up the
+        # tighter margins (safety_z_margin_strict, max_joint_delta_strict)
+        # when this is True. Defaults True on the real robot env.
+        self.enable_strict_safety = True
+
+        # Joint-state freshness tracker. The task env's env_loop gates
+        # on (now - _latest_joint_state_time) so a dead driver / cable
+        # disconnect doesn't keep publishing actions against frozen
+        # state.
+        self._latest_joint_state_time = None
+
+        # Per-link FK chains for the safety check. Each subchain spans
+        # base_link → that link, so PyKDL expects len(q) == kin.num_joints
+        # (NOT the full arm DOF). Cached at __init__ to amortize the URDF
+        # parse cost.
+        self._safety_kin = {}
+        for _link in self.SAFETY_CHECK_LINKS:
+            try:
+                _kin = KDLKinematics(urdf=self.pykdl_robot,
+                                     base_link=self.ref_frame,
+                                     end_link=_link)
+                self._safety_kin[_link] = (_kin, int(_kin.num_joints))
+            except Exception as _e:
+                rospy.logwarn(f"[SAFETY] kinematics setup failed for {_link}: {_e}")
+
         rospy.loginfo("End Init RX200RobotGoalEnv")
 
     # ---------------------------------------------------
     #   Custom methods for the Robot Environment
-
-    """
-    Define the custom methods for the environment
-        * fk_pykdl: Function to calculate the forward kinematics of the robot arm. We are using pykdl_utils.
-        * calculate_fk: Calculate the forward kinematics of the robot arm using the ros_kinematics package.
-        * calculate_ik: Calculate the inverse kinematics of the robot arm using the ros_kinematics package. 
-        * joint_state_callback: Get the joint state of the robot
-        * move_arm_joints: Set a joint position target only for the arm joints using low-level ros controllers.
-        * move_gripper_joints: Set a joint position target only for the gripper joints using low-level ros controllers.
-        * smooth_trajectory: Smooth the trajectory by interpolating between the current and target positions.
-        * publish_trajectory: Publish the entire trajectory at once.
-        * set_trajectory_joints: Set a joint position target only for the arm joints.
-        * set_trajectory_ee: Set a pose target for the end effector of the robot arm.
-        * get_ee_pose: Get end-effector pose a geometry_msgs/PoseStamped message
-        * get_ee_rpy: Get end-effector orientation as a list of roll, pitch, and yaw angles.
-        * get_joint_angles: Get current joint angles of the robot arm - 5 elements
-        * check_goal: Check if the goal is reachable
-        * check_goal_reachable_joint_pos: Check if the goal is reachable with joint positions
-        * kinect_depth_callback: Callback function for kinect depth sensor
-        * kinect_rgb_callback: Callback function for kinect rgb sensor
-        * zed2_depth_callback: Callback function for zed2 depth sensor
-        * zed2_rgb_callback: Callback function for zed2 rgb sensor
-    """
 
     def fk_pykdl(self, action):
         """
@@ -294,10 +256,14 @@ class RX200RobotGoalEnv(RealGoalEnv.RealGoalEnv):
     def joint_state_callback(self, joint_state):
         """
         Function to get the joint state of the robot.
+
+        Also stamps ``_latest_joint_state_time`` so the env_loop can
+        gate ticks on driver freshness (real-side only).
         """
 
         if joint_state is not None:
             self.joint_state = joint_state
+            self._latest_joint_state_time = rospy.get_time()
 
             # joint names - not using this
             self.joint_state_names = list(joint_state.name)
@@ -311,6 +277,73 @@ class RX200RobotGoalEnv(RealGoalEnv.RealGoalEnv):
 
             # get the current joint efforts - not using this
             self.current_joint_efforts = list(joint_state.effort)
+
+    # Arm links whose world z must stay above the table for the action to be
+    # safe. Order matches the URDF chain shoulder → ee_gripper. Links rigidly
+    # downstream of gripper_link are covered implicitly.
+    SAFETY_CHECK_LINKS = (
+        "rx200/shoulder_link",
+        "rx200/upper_arm_link",
+        "rx200/forearm_link",
+        "rx200/wrist_link",
+        "rx200/gripper_link",
+        "rx200/ee_gripper_link",
+    )
+
+    def _check_action_links_safe(self, joint_targets, current_joints=None):
+        """Predict each arm link's world z under ``joint_targets`` and reject
+        the action if any link would dip below ``table_z + safety_z_margin``.
+        Also caps |target - current| per joint at ``max_joint_delta``.
+
+        When ``self.enable_strict_safety`` is True (default on the real
+        robot env) the tighter margins are used:
+          safety_z_margin_strict (default 0.030)
+          max_joint_delta_strict (default 0.15)
+
+        Returns
+        -------
+        (safe, reason) : (bool, Optional[str])
+        """
+        strict = bool(getattr(self, "enable_strict_safety", False))
+        table_z = float(rospy.get_param("/rx200/table_z", -0.005))
+        if strict:
+            margin = float(rospy.get_param("/rx200/safety_z_margin_strict", 0.030))
+            max_delta = float(rospy.get_param("/rx200/max_joint_delta_strict", 0.15))
+        else:
+            margin = float(rospy.get_param("/rx200/safety_z_margin", 0.015))
+            max_delta = float(rospy.get_param("/rx200/max_joint_delta", 0.5))
+        floor = table_z + margin
+
+        q = np.asarray(joint_targets, dtype=np.float64)
+
+        if current_joints is not None:
+            cur = np.asarray(current_joints, dtype=np.float64)
+            if cur.shape == q.shape:
+                deltas = np.abs(q - cur)
+                if np.any(deltas > max_delta):
+                    idx = int(np.argmax(deltas))
+                    return False, f"joint[{idx}] delta {deltas[idx]:.3f} > {max_delta}"
+
+        per_link_z = []
+        for link, (kin, n) in self._safety_kin.items():
+            try:
+                pose = kin.forward(q[:n])
+            except Exception as e:
+                return False, f"FK failed for {link}: {e}"
+            z = float(pose[2, 3])
+            per_link_z.append((link, z))
+            if z < floor:
+                return False, f"{link} predicted z={z:.3f} < floor={floor:.3f}"
+
+        if not hasattr(self, "_safety_log_count"):
+            self._safety_log_count = 0
+        if self._safety_log_count < 3:
+            self._safety_log_count += 1
+            zs = ", ".join(f"{l.rsplit('/', 1)[-1]}={z:.3f}" for l, z in per_link_z)
+            rospy.loginfo(f"[SAFETY-REAL] call #{self._safety_log_count}: floor={floor:.3f}, {zs}")
+
+        return True, None
+
     def move_arm_joints(self, q_positions: np.ndarray, time_from_start: float = 0.5) -> bool:
         """
         Set a joint position target only for the arm joints using low-level ros controllers.

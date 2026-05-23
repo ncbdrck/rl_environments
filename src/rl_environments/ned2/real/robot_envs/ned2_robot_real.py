@@ -5,7 +5,7 @@ import rostopic
 from gymnasium.envs.registration import register
 
 import numpy as np
-from sensor_msgs.msg import JointState, PointCloud2, Image
+from sensor_msgs.msg import JointState, PointCloud2, Image, CompressedImage
 from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -28,14 +28,6 @@ from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
 from tf.transformations import euler_from_matrix
 
-"""
-Although it is best to register only the task environment, one can also register the robot environment. 
-This is not necessary, but we can see if this section 
-works by calling "gymnasium.make" this env.
-but you need to
-    1. init a node - rospy.init_node('test_MyRobotEnv')
-    2. gymnasium.make("NED2RobotBaseEnv-v0")
-"""
 register(
     id='NED2RobotBaseEnv-v0',
     entry_point='rl_environments.ned2.real.robot_envs.ned2_robot_real:NED2RobotEnv',
@@ -49,7 +41,7 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
     """
 
     def __init__(self, ros_port:str = None, seed: int = None, close_env_prompt: bool = False, action_cycle_time=0.0,
-                 use_kinect: bool = False, use_zed2: bool = False,
+                 use_kinect: bool = False, use_zed2: bool = False, use_wrist_camera: bool = False,
                  remote_ip: str = None, local_ip:str = None, multi_device_mode: bool = True):
         """
         Initializes a new Robot Environment
@@ -69,9 +61,6 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
         """
         rospy.loginfo("Start Init  NED2RobotEnv RealROS")
 
-        """
-        Change the ros/gazebo master
-        """
         if multi_device_mode:
             ros_common.change_ros_master_multi_device(remote_ip=remote_ip,
                                                       local_ip=local_ip, remote_ros_port=ros_port)
@@ -79,38 +68,19 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
         elif ros_port is not None:
             ros_common.change_ros_master(ros_port=ros_port)
 
-        """
-        parameters
-        """
         # none for now
-
-        """
-        Launch a roslaunch file that will setup the connection with the real robot 
-        """
 
         load_robot = False
 
-        """
-        kill rosmaster at the end of the env
-        """
         kill_rosmaster = False
 
-        """
-        Clean ros Logs at the end of the env
-        """
         clean_logs = True
 
-        """
-        Init GazeboBaseEnv.
-        """
         super().__init__(
             load_robot=load_robot, kill_rosmaster=kill_rosmaster, clean_logs=clean_logs,
             ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt, action_cycle_time=action_cycle_time,
             multi_device_mode=multi_device_mode, remote_ip=remote_ip, local_ip=local_ip)
 
-        """
-        initialise controller and sensor objects here
-        """
         # ---------- joint state
         self.joint_state_topic = "/joint_states"
 
@@ -122,9 +92,10 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
                                                robot_description="/robot_description",
                                                ns="/")
 
-        # ---------- kinect or zed2
+        # ---------- kinect / zed2 / Niryo wrist camera
         self.use_kinect = use_kinect
         self.use_zed2 = use_zed2
+        self.use_wrist_camera = use_wrist_camera
 
         # todo: find the actual topic names
         if self.use_kinect:
@@ -154,10 +125,21 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
             self.zed2_rgb = Image()
             self.cv_image_rgb = None
 
-        """
-        Using the _check_connection_and_readiness method to check for the connection status of subscribers, publishers 
-        and services
-        """
+        # Niryo's built-in wrist camera (real). Source is the
+        # niryo_robot_vision node which publishes
+        # /niryo_robot_vision/compressed_video_stream (CompressedImage)
+        # — Niryo doesn't expose a raw Image topic for the wrist cam,
+        # only the compressed stream. cv_bridge decodes it directly.
+        if self.use_wrist_camera:
+            self.wrist_camera_rgb_sub = rospy.Subscriber(
+                "/niryo_robot_vision/compressed_video_stream",
+                CompressedImage,
+                self.wrist_camera_rgb_callback,
+                queue_size=1,
+            )
+            self.wrist_camera_rgb = CompressedImage()
+            self.cv_image_wrist = None
+
         self._check_connection_and_readiness()
 
         # For ROS Controllers
@@ -187,36 +169,40 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
                                                          base_link=self.ref_frame,
                                                          end_link=self.ee_link)
 
-        """
-        Finished __init__ method
-        """
+        # Strict-safety flag — picked up by _check_action_links_safe to
+        # use the tighter margins (safety_z_margin_strict,
+        # max_joint_delta_strict). Defaults True on the real robot env.
+        self.enable_strict_safety = True
+
+        # Joint-state freshness tracker. The joint_state_callback below
+        # stamps ``_latest_joint_state_time`` on every /joint_states
+        # message; task-env env_loops gate on
+        # ``now - _latest_joint_state_time > joint_state_timeout_s`` to
+        # skip executing actions against a frozen stale state when the
+        # driver / cable goes down.
+        self._latest_joint_state_time = None
+
+        # Per-link FK chains for the safety check. KDLKinematics needs
+        # one solver per subchain (base_link → that link). tool_link is
+        # only present when the gripper URDF is loaded; the try/except
+        # below logs and skips if a link isn't on the parameter server.
+        # See RX200RobotEnv (d8b5517) for the full design rationale.
+        self._safety_kin = {}
+        for _link in self.SAFETY_CHECK_LINKS:
+            rospy.loginfo(f"[SAFETY] building kinematics for {_link} ...")
+            try:
+                _kin = KDLKinematics(urdf=self.pykdl_robot,
+                                     base_link=self.ref_frame,
+                                     end_link=_link)
+                self._safety_kin[_link] = (_kin, int(_kin.num_joints))
+                rospy.loginfo(f"[SAFETY] {_link} ok ({_kin.num_joints} joints)")
+            except Exception as _e:
+                rospy.logwarn(f"[SAFETY] kinematics setup failed for {_link}: {_e}")
+
         rospy.loginfo("End Init NED2RobotEnv")
 
     # ---------------------------------------------------
     #   Custom methods for the Robot Environment
-
-    """
-    Define the custom methods for the environment
-        * fk_pykdl: Function to calculate the forward kinematics of the robot arm. We are using pykdl_utils.
-        * calculate_fk: Calculate the forward kinematics of the robot arm using the ros_kinematics package.
-        * calculate_ik: Calculate the inverse kinematics of the robot arm using the ros_kinematics package. 
-        * joint_state_callback: Get the joint state of the robot
-        * move_arm_joints: Set a joint position target only for the arm joints using low-level ros controllers.
-        * move_gripper_joints: Set a joint position target only for the gripper joints using low-level ros controllers.
-        * smooth_trajectory: Smooth the trajectory by interpolating between the current and target positions.
-        * publish_trajectory: Publish the entire trajectory at once.
-        * set_trajectory_joints: Set a joint position target only for the arm joints.
-        * set_trajectory_ee: Set a pose target for the end effector of the robot arm.
-        * get_ee_pose: Get end-effector pose a geometry_msgs/PoseStamped message
-        * get_ee_rpy: Get end-effector orientation as a list of roll, pitch, and yaw angles.
-        * get_joint_angles: Get current joint angles of the robot arm - 5 elements
-        * check_goal: Check if the goal is reachable
-        * check_goal_reachable_joint_pos: Check if the goal is reachable with joint positions
-        * kinect_depth_callback: Callback function for kinect depth sensor
-        * kinect_rgb_callback: Callback function for kinect rgb sensor
-        * zed2_depth_callback: Callback function for zed2 depth sensor
-        * zed2_rgb_callback: Callback function for zed2 rgb sensor
-    """
 
     def fk_pykdl(self, action):
         """
@@ -282,10 +268,14 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
     def joint_state_callback(self, joint_state):
         """
         Function to get the joint state of the robot.
+
+        Also stamps ``_latest_joint_state_time`` so task envs can
+        detect driver / cable disconnects via env_loop freshness gates.
         """
 
         if joint_state is not None:
             self.joint_state = joint_state
+            self._latest_joint_state_time = rospy.get_time()
 
             # joint names - not using this
             self.joint_state_names = list(joint_state.name)
@@ -426,7 +416,7 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
 
     def get_joint_angles(self):
         """
-        get current joint angles of the robot arm - 5 elements
+        get current joint angles of the robot arm - 6 elements
         Returns a list
         """
         return self.move_NED2_object.get_joint_angles_robot_arm()
@@ -472,6 +462,18 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
         # print("Shape of rgb:", cv_image_rgb.shape)  # for debugging
         # todo: for the CNN policy
         # (480, 640, 3) - for pytorch, this needs to be converted to (3, 480, 640)
+
+    def wrist_camera_rgb_callback(self, img_msg):
+        """
+        Callback for Niryo's built-in wrist camera (real).
+        Source: /niryo_robot_vision/compressed_video_stream
+        (sensor_msgs/CompressedImage). cv_bridge decodes the compressed
+        bytes; result goes to self.cv_image_wrist as RGB.
+        """
+        self.wrist_camera_rgb = img_msg
+        bridge = CvBridge()
+        cv_image_bgr = bridge.compressed_imgmsg_to_cv2(img_msg, desired_encoding="bgr8")
+        self.cv_image_wrist = cv2.cvtColor(cv_image_bgr, cv2.COLOR_BGR2RGB)
 
     def zed2_depth_callback(self, data):
         """
@@ -547,6 +549,80 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
         rospy.logdebug(rostopic.get_topic_type("/zed2/left/image_rect_color", blocking=True))
 
         return True
+
+    # ---------------------------------------------------
+    #   Per-link FK safety (mirrors RX200RobotEnv.d8b5517 for Ned2 real)
+
+    # Arm links whose world z must stay above the table/ground for the
+    # action to be safe. Order matches URDF chain shoulder→tool.
+    # tool_link only exists if the gripper URDF is loaded (PnP runs);
+    # missing links are skipped at build time with a warning.
+    SAFETY_CHECK_LINKS = (
+        "shoulder_link",
+        "arm_link",
+        "elbow_link",
+        "forearm_link",
+        "wrist_link",
+        "tool_link",
+    )
+
+    def _check_action_links_safe(self, joint_targets, current_joints=None):
+        """Predict each arm link's world z under ``joint_targets`` and reject
+        the action if any link would dip below ``table_z + safety_z_margin``.
+        Also caps |target - current| per joint at ``max_joint_delta``.
+
+        When ``self.enable_strict_safety`` is True (default on the real
+        robot env) the tighter margins are used:
+          safety_z_margin_strict (default 0.030)
+          max_joint_delta_strict (default 0.15)
+
+        Returns
+        -------
+        (safe, reason) : (bool, Optional[str])
+        """
+        strict = bool(getattr(self, "enable_strict_safety", False))
+        table_z = float(rospy.get_param("/ned2/table_z", -0.005))
+        if strict:
+            margin = float(rospy.get_param("/ned2/safety_z_margin_strict", 0.030))
+            max_delta = float(rospy.get_param("/ned2/max_joint_delta_strict", 0.15))
+        else:
+            margin = float(rospy.get_param("/ned2/safety_z_margin", 0.015))
+            max_delta = float(rospy.get_param("/ned2/max_joint_delta", 0.5))
+        floor = table_z + margin
+
+        q = np.asarray(joint_targets, dtype=np.float64)
+
+        # Per-joint delta cap (skipped when current pose is unknown).
+        if current_joints is not None:
+            cur = np.asarray(current_joints, dtype=np.float64)
+            if cur.shape == q.shape:
+                deltas = np.abs(q - cur)
+                if np.any(deltas > max_delta):
+                    idx = int(np.argmax(deltas))
+                    return False, f"joint[{idx}] delta {deltas[idx]:.3f} > {max_delta}"
+
+        # Per-link z check via cached pykdl subchains.
+        per_link_z = []
+        for link, (kin, n) in self._safety_kin.items():
+            try:
+                pose = kin.forward(q[:n])
+            except Exception as e:
+                return False, f"FK failed for {link}: {e}"
+            z = float(pose[2, 3])
+            per_link_z.append((link, z))
+            if z < floor:
+                return False, f"{link} predicted z={z:.3f} < floor={floor:.3f}"
+
+        # First-3-calls debug log so the floor + per-link z values are
+        # visible at startup. Then goes quiet to avoid log spam.
+        if not hasattr(self, "_safety_log_count"):
+            self._safety_log_count = 0
+        if self._safety_log_count < 3:
+            self._safety_log_count += 1
+            zs = ", ".join(f"{l.rsplit('/', 1)[-1]}={z:.3f}" for l, z in per_link_z)
+            rospy.loginfo(f"[SAFETY] call #{self._safety_log_count}: floor={floor:.3f}, {zs}")
+
+        return True, None
 
     # ---------------------------------------------------
     #   Methods to override in the Robot Environment

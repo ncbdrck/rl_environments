@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>rl_environments</name>
-  <version>0.0.1</version>
+  <version>0.2.0</version>
   <description>The rl_environments package</description>
 
   <author email="j.kapukotuwa@research.ait.ie">Jayasekara Kapukotuwa</author>
@@ -29,6 +29,7 @@
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>multiros</exec_depend>
   <exec_depend>realros</exec_depend>
+  <exec_depend>gazebo_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
 

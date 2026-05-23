@@ -22,20 +22,11 @@ from multiros.utils import ros_controllers
 from multiros.utils import ros_markers
 
 # Register your environment using the gymnasium register method to utilize gym.make("TaskEnv-v0").
-register(
-    id='RX200PushSim-v0',
-    entry_point='rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim:RX200PushEnv',
-    max_episode_steps=1000,
-)
-
-"""
-This is the v0 of the RX200 Push Task Environment.
-- uses the kinect v2 sensor
-- option to use vision sensors - depth and rgb images
-- action space is joint positions of the robot arm or xyz position of the end effector. No gripper control
-- reward is sparse or dense
-- goal is to push a cube to a goal position
-"""
+# register(
+#     id='RX200PushSim-v1',
+#     entry_point='rl_environments.rx200.sim.task_envs.push.rx200_kinect_push_sim_v1:RX200PushEnv',
+#     max_episode_steps=1000,
+# )
 
 
 class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
@@ -62,6 +53,7 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         * ee_action_type: Whether to use the end effector action space or the joint action space.
         * environment_loop_rate: Rate at which the environment should run. (in Hz) - default 10 Hz (default operating frequency of the robot)
         * action_cycle_time: Time to wait between two consecutive actions. (in seconds) - default 100 ms (should be equal to larger than the environment loop time "1/environment_loop_rate")
+        * realtime_mode: If True (default), runs the UniROS paper §7 real-time loop — physics is never paused, a rospy.Timer at ``environment_loop_rate`` updates obs/reward/done, and ``step()`` reads the latest cached values. This matches the real env, so policies transfer / concurrent sim+real learning Just Works. If False, runs the standard MDP loop — Gazebo physics is paused around each ``_set_action``, the action is executed synchronously, the agent waits ``action_cycle_time`` for the trajectory, then a fresh obs/reward/done is sampled. The non-realtime mode is for clean RL-algorithm benchmarking where you want every sample to correspond exactly to the post-action world state.
         * use_smoothing: Whether to use smoothing for actions or not.
         * rgb_obs_only: Whether to use only the RGB image as the observations or not.
         * normal_obs_only: Whether to use only the traditional observations or not.
@@ -85,25 +77,16 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
                  load_table: bool = True, debug: bool = False, action_speed: float = 0.5,
                  simple_dense_reward: bool = True, log_internal_state: bool = False, random_goal: bool = False,
-                 random_cube_spawn: bool = True):
+                 random_cube_spawn: bool = True,
+                 realtime_mode: bool = True):
 
-        """
-        variables to keep track of ros, gazebo ports and gazebo pid
-        """
+        # Real-time vs normal MDP step mode. See docstring above.
+        self.realtime_mode = realtime_mode
+
         ros_port = None
         gazebo_port = None
         gazebo_pid = None
 
-        """
-        Initialise the env
-
-        It is recommended to launch Gazebo with a new roscore at this point for the following reasons:,
-            1.  This allows running a new rosmaster to enable vectorisation of the environment and the execution of
-                multiple environments concurrently.
-            2.  The environment can keep track of the process ID of Gazebo to automatically close it when env.close()
-                is called.
-
-        """
         # launch gazebo
         if launch_gazebo:
 
@@ -123,9 +106,6 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
             ros_common.change_ros_master(ros_port)
 
         else:
-            """
-            Check for roscore
-            """
             if ros_common.is_roscore_running() is False:
                 print("roscore is not running! Launching a new roscore and Gazebo!")
                 ros_port, gazebo_port, gazebo_pid = gazebo_core.launch_gazebo(launch_roscore=new_roscore,
@@ -141,31 +121,15 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
 
         rospy.init_node(self.node_name, anonymous=True)
 
-        """
-        Provide a description of the task.
-        """
         rospy.loginfo(f"Starting {self.node_name}")
 
-        """
-        Exit the program if
-        - (1/environment_loop_rate) is greater than action_cycle_time
-        """
         if (1.0 / environment_loop_rate) > action_cycle_time:
             rospy.logerr("The environment loop rate is greater than the action cycle time. Exiting the program!")
             rospy.signal_shutdown("Exiting the program!")
             exit()
 
-        """
-        log internal state - using rospy loginfo, logwarn, logerr
-        """
         self.log_internal_state = log_internal_state
 
-        """
-        Reward Architecture
-            * Dense - Default
-            * Sparse - -1 if not done and 1 if done
-            * All the others and misspellings - default to "Dense" reward
-        """
         if reward_type.lower() == "sparse":
             self.reward_arc = "Sparse"
 
@@ -180,64 +144,30 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         # for simple, we only return the distance to the goal (negative Euclidean distance = -d)
         self.simple_dense_reward = simple_dense_reward
 
-        """
-        Use action as deltas
-        """
         self.delta_action = delta_action
         self.delta_coeff = delta_coeff
 
-        """
-        Use smoothing for actions
-        """
         self.use_smoothing = use_smoothing
         self.action_cycle_time = action_cycle_time
 
-        """
-        Action speed - Time to complete the trajectory
-        """
         self.action_speed = action_speed
 
-        """
-        Observation space
-            * RGB image only
-            * traditional observations only (default)
-            * RGB image and traditional observations (combined)
-            * RGB image, Depth image and traditional observations (combined)
-        """
         self.rgb_obs = rgb_obs_only
         self.normal_obs = normal_obs_only
         self.rgb_plus_normal_obs = rgb_plus_normal_obs
         self.rgb_plus_depth_plus_normal_obs = rgb_plus_depth_plus_normal_obs
 
-        """
-        Action space
-            * Joint action space (default)
-            * End effector action space
-        """
         self.ee_action_type = ee_action_type
 
-        """
-        Goal and Cube spawn
-        """
         self.random_goal = random_goal
         self.random_cube_spawn = random_cube_spawn
 
-        """
-        Debug
-        """
         self.debug = debug
-
-        """
-        Load YAML param file
-        """
 
         # add to ros parameter server
         ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="rx200_push_task_config.yaml", ns="/")
         self._get_params()
 
-        """
-        Define the action space.
-        """
         # Joint action space or End effector action space
         # ROS and Gazebo often use double-precision (64-bit),
         # but we are using single-precision (32-bit) as it is typical for RL implementations.
@@ -256,29 +186,6 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
             # Joint action space
             self.action_space = spaces.Box(low=np.array(self.min_joint_values), high=np.array(self.max_joint_values),
                                            dtype=np.float32)
-
-        """
-        Define the observation space.
-
-        # typical observation
-        01. EE pos - 3
-        02. EE rpy - 3
-        03. Vector to the goal (normalized linear distance) - 3
-        04. Euclidian distance (cube to push goal)- 1
-        05. Current Joint values - 8
-        06. Previous action - 5 or 3 (joint or ee)
-        07. Joint velocities - 8  # I don't think we need this since we're not using velocity control
-        08. Cube pos - 3
-        09. Cube rpy - 3
-
-        total: (3x5) + 1 + (5 or 3) + (8x2) = 37 or 35
-
-        # depth image
-        480x640 32FC1
-
-        # rgb image
-        480x640X3 RGB images
-        """
 
         # ---- ee pos
         observations_high_ee_pos_range = np.array(
@@ -328,15 +235,41 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         observations_low_cube_rpy = np.array(
             np.array([self.rpy_cube_min["r"], self.rpy_cube_min["p"], self.rpy_cube_min["y"]]))
 
+        # ---- cube linear velocity (finite-diff)
+        observations_high_cube_lin_vel = np.array(
+            np.array([self.linear_velocity_cube_max["x"], self.linear_velocity_cube_max["y"],
+                      self.linear_velocity_cube_max["z"]]))
+        observations_low_cube_lin_vel = np.array(
+            np.array([self.linear_velocity_cube_min["x"], self.linear_velocity_cube_min["y"],
+                      self.linear_velocity_cube_min["z"]]))
+
+        # ---- cube angular velocity (rpy-diff with wrap-around)
+        observations_high_cube_ang_vel = np.array(
+            np.array([self.angular_velocity_cube_max["r"], self.angular_velocity_cube_max["p"],
+                      self.angular_velocity_cube_max["y"]]))
+        observations_low_cube_ang_vel = np.array(
+            np.array([self.angular_velocity_cube_min["r"], self.angular_velocity_cube_min["p"],
+                      self.angular_velocity_cube_min["y"]]))
+
+        # ---- cube position relative to EE (cube_pos - ee_pos)
+        observations_high_cube_rel = np.array(
+            np.array([self.cube_rel_to_ee_max["x"], self.cube_rel_to_ee_max["y"],
+                      self.cube_rel_to_ee_max["z"]]))
+        observations_low_cube_rel = np.array(
+            np.array([self.cube_rel_to_ee_min["x"], self.cube_rel_to_ee_min["y"],
+                      self.cube_rel_to_ee_min["z"]]))
+
         high = np.concatenate(
             [observations_high_ee_pos_range, observations_high_ee_rpy, observations_high_vec_ee_goal,
              observations_high_dist, observations_high_joint_values, observations_high_prev_action,
-             observations_high_joint_vel, observations_high_cube_pos, observations_high_cube_rpy, ])
+             observations_high_joint_vel, observations_high_cube_pos, observations_high_cube_rpy,
+             observations_high_cube_lin_vel, observations_high_cube_ang_vel, observations_high_cube_rel, ])
 
         low = np.concatenate(
             [observations_low_ee_pos_range, observations_low_ee_rpy, observations_low_vec_ee_goal,
              observations_low_dist, observations_low_joint_values, observations_low_prev_action,
-             observations_low_joint_vel, observations_low_cube_pos, observations_low_cube_rpy, ])
+             observations_low_joint_vel, observations_low_cube_pos, observations_low_cube_rpy,
+             observations_low_cube_lin_vel, observations_low_cube_ang_vel, observations_low_cube_rel, ])
 
         # Define the traditional observation space
         self.observations = spaces.Box(low=low, high=high, dtype=np.float32)
@@ -378,12 +311,6 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
             use_kinect = False
             self.observation_space = self.observations
 
-        """
-        Goal space for sampling
-        - default - not used for selecting a random goal
-        - used for spawning the cube at a random position in Gazebo - random_cube_spawn==True
-        - if specified, sample a goal within the specified range to push the cube to - random_goal==True
-        """
         # ---- Goal pos
         high_goal_pos_range = np.array(
             np.array([self.position_goal_max["x"], self.position_goal_max["y"], self.position_goal_max["z"]]))
@@ -394,9 +321,6 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         self.goal_space = spaces.Box(low=low_goal_pos_range, high=high_goal_pos_range, dtype=np.float32,
                                      seed=seed)
 
-        """
-        Workspace so we can check if the action is within the workspace
-        """
         # ---- Workspace
         high_workspace_range = np.array(
             np.array([self.workspace_max["x"], self.workspace_max["y"], self.workspace_max["z"]]))
@@ -407,19 +331,15 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         # we don't need to set the seed here since we're not sampling from this space
         self.workspace_space = spaces.Box(low=low_workspace_range, high=high_workspace_range, dtype=np.float32)
 
-        """
-        Define subscribers/publishers and Markers as needed.
-        """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
                                                  lifetime=30.0)
         self.cube_marker = ros_markers.RosMarker(frame_id="world", ns="cube", marker_type=2, marker_topic="cube_pos",
                                                  lifetime=30.0)
 
-        """
-        Init super class.
-        """
+        # RX200RobotEnv maps real_time → unpause_pause_physics; this single
+        # flag drives both step modes.
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-                         real_time=True, action_cycle_time=action_cycle_time, use_kinect=use_kinect,
+                         real_time=self.realtime_mode, action_cycle_time=action_cycle_time, use_kinect=use_kinect,
                          load_table=load_table)
 
         # for smoothing
@@ -448,18 +368,28 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
                 self.loop_counter = 0
                 self.action_counter = 0
 
-            # create a timer to run the environment loop
-            rospy.Timer(rospy.Duration(1.0 / environment_loop_rate), self.environment_loop)
+            # Real-time mode only: spin up the rospy.Timer-driven env loop
+            # (paper §7). Normal mode reuses the same cache but the compute
+            # happens synchronously inside _set_action — no timer.
+            if self.realtime_mode:
+                rospy.Timer(rospy.Duration(1.0 / environment_loop_rate), self.environment_loop)
 
         # for dense reward calculation
         self.action_not_in_limits = False
         self.lowest_z = self.workspace_min["z"]  # lowest z value in the workspace
+
+        # Cube velocity state (finite-diff baseline). Reset to None at the
+        # start of each episode in _set_init_params so the first tick of
+        # a new episode reads zero velocity rather than a spurious value
+        # carried over from the previous episode's last pose.
+        self.prev_cube_pos = None
+        self.prev_cube_rpy = None
+        self.prev_cube_time = None
+        self.cube_linear_velocity = np.zeros(3, dtype=np.float32)
+        self.cube_angular_velocity = np.zeros(3, dtype=np.float32)
         self.movement_result = False
         self.within_goal_space = False
 
-        """
-        Finished __init__ method
-        """
         rospy.loginfo(f"Finished Init of {self.node_name}")
 
     # -------------------------------------------------------
@@ -487,6 +417,14 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         self.init_close_gripper = np.array([0.018, -0.018], dtype=np.float32)
         # open the gripper (not used)
         self.init_open_gripper = np.array([0.036, -0.036], dtype=np.float32)
+
+        # Reset cube-velocity finite-diff state so the new episode doesn't
+        # inherit the previous one's tail-end pose as its baseline.
+        self.prev_cube_pos = None
+        self.prev_cube_rpy = None
+        self.prev_cube_time = None
+        self.cube_linear_velocity = np.zeros(3, dtype=np.float32)
+        self.cube_angular_velocity = np.zeros(3, dtype=np.float32)
 
         # make the current action None to stop execution for real time envs and also stop the env loop
         self.init_done = False  # we don't need to execute the loop until we reset the env
@@ -599,6 +537,13 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         """
         Function to apply an action to the robot.
 
+        Real-time mode (default): stash the action; the timer-driven
+        environment_loop is what calls execute_action (paper §7).
+        Normal MDP mode (realtime_mode=False): execute the action
+        synchronously and clear the obs/reward/done cache so the
+        _get_* fallbacks resample against the post-action world after
+        GazeboBaseEnv.step's action_cycle_time sleep.
+
         Args:
             action: The action to be applied to the robot.
         """
@@ -606,9 +551,16 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         self.prev_action = action.copy()
 
         if self.log_internal_state:
-            rospy.loginfo(f"Applying real-time action---> {action}")
+            rospy.loginfo(f"Applying action---> {action}")
 
         self.current_action = action.copy()
+
+        if not self.realtime_mode:
+            self.obs_r = None
+            self.reward_r = None
+            self.terminated_r = None
+            self.info_r = {}
+            self.execute_action(action)
 
         # for debugging
         if self.debug:
@@ -705,6 +657,19 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         #  we don't need to execute the loop until we reset the env
         if self.init_done:
 
+            # Close-race guard (see reach v3 0712f5a for the diagnosis):
+            # rospy.Timer keeps firing during env.close() while MoveIt
+            # cleanup runs its 1s wait_for_message timeouts. Controllers
+            # get unspawned mid-close → joint_states stops → get_joint_angles
+            # returns []. Next tick's execute_action crashes on the
+            # delta-action broadcast (shape (0,) vs (5,)). Bail out cleanly
+            # if ROS is shutting down or joint state is stale.
+            if rospy.is_shutdown():
+                return
+            jv = getattr(self, "joint_values", None)
+            if jv is None or len(jv) < 5:
+                return
+
             if self.debug:
                 if self.log_internal_state:
                     rospy.loginfo(f"Starting RL loop --->: {self.loop_counter}")
@@ -744,6 +709,10 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         # --- Set the action based on the action type
         # --- EE action
         if self.ee_action_type:
+
+            # --- Get the current EE position
+            ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
+            self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
 
             # --- Make actions as deltas
             if self.delta_action:
@@ -788,10 +757,24 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
                 IK_found, joint_positions = self.calculate_ik(target_pos=action, ee_ori=self.ee_ori)
 
                 if IK_found:
-                    # execute the trajectory - EE
-                    self.movement_result = self.move_arm_joints(q_positions=joint_positions,
-                                                                time_from_start=self.action_speed)
-                    self.within_goal_space = True
+                    # Per-link FK safety (RX200RobotEnv._check_action_links_safe).
+                    # Workspace + IK-feasible doesn't mean every link stays
+                    # above the table — shoulder/elbow/wrist can dip below
+                    # while EE target sits above. See reach v3 (0a6dfb3) for
+                    # the full rationale.
+                    safe, reason = self._check_action_links_safe(
+                        joint_positions, current_joints=self.joint_values
+                    )
+                    if not safe:
+                        if self.log_internal_state:
+                            rospy.logwarn(f"[SAFETY] EE action rejected: {reason}")
+                        self.movement_result = False
+                        self.within_goal_space = False
+                    else:
+                        # execute the trajectory - EE
+                        self.movement_result = self.move_arm_joints(q_positions=joint_positions,
+                                                                    time_from_start=self.action_speed)
+                        self.within_goal_space = True
 
                 else:
                     if self.log_internal_state:
@@ -811,6 +794,9 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
 
             # --- Make actions as deltas
             if self.delta_action:
+
+                # get the current joint values
+                self.joint_values = self.get_joint_angles()
 
                 # we can use smoothing using the action_cycle_time or delta_coeff
                 if self.use_smoothing:
@@ -856,9 +842,20 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
 
             # check if the action is within the workspace
             if self.check_action_within_workspace(action):
-                # execute the trajectory - ros_controllers
-                self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
-                self.within_goal_space = True
+                # Per-link FK safety. self.joint_values was refreshed at the
+                # top of this delta-action block, so the delta cap can use it.
+                safe, reason = self._check_action_links_safe(
+                    action, current_joints=self.joint_values
+                )
+                if not safe:
+                    if self.log_internal_state:
+                        rospy.logwarn(f"[SAFETY] joint action rejected: {reason}")
+                    self.movement_result = False
+                    self.within_goal_space = False
+                else:
+                    # execute the trajectory - ros_controllers
+                    self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
+                    self.within_goal_space = True
 
             else:
                 if self.log_internal_state:
@@ -926,7 +923,7 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         linear_dist_ee_goal = current_goal - self.cube_pos  # goal is box dtype and ee_pos is numpy.array. It is okay
 
         # --- 3. Vector to goal (we are giving only the direction vector)
-        vec_ee_goal = linear_dist_ee_goal / np.linalg.norm(linear_dist_ee_goal)
+        vec_ee_goal = self._safe_unit_vector(linear_dist_ee_goal)
 
         # --- 4. Euclidian distance
         euclidean_distance_cube_goal = scipy.spatial.distance.euclidean(self.cube_pos, current_goal)  # float
@@ -955,10 +952,38 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
             while not done:
                 done = self._check_joint_states_ready()
 
+        # Cube velocity via finite-diff. dt is the wall-clock gap since the
+        # previous sample_observation call (~ environment_loop period in
+        # real-time mode, action_cycle_time in normal MDP mode). The first
+        # tick has no baseline so velocity stays at zero.
+        now = rospy.get_time()
+        if (self.prev_cube_pos is not None and self.prev_cube_rpy is not None
+                and self.prev_cube_time is not None):
+            dt = now - self.prev_cube_time
+            if dt > 1e-6:
+                self.cube_linear_velocity = ((self.cube_pos - self.prev_cube_pos)
+                                             / dt).astype(np.float32)
+                # Angular velocity: wrap each rpy delta into (-pi, pi] before
+                # dividing so a small rotation across the +-pi seam doesn't
+                # spike (rare for a pushed cube, but cheap to guard).
+                drpy = np.asarray(self.cube_ori, dtype=np.float32) - self.prev_cube_rpy
+                drpy = (drpy + np.pi) % (2.0 * np.pi) - np.pi
+                self.cube_angular_velocity = (drpy / dt).astype(np.float32)
+        self.prev_cube_pos = self.cube_pos.astype(np.float32).copy()
+        self.prev_cube_rpy = np.asarray(self.cube_ori, dtype=np.float32).copy()
+        self.prev_cube_time = now
+
+        # Cube position relative to EE - explicit feature for the approach
+        # phase. Derivable from cube_pos and ee_pos, but giving the agent
+        # the difference directly speeds up learning (FetchPush convention).
+        cube_rel_to_ee = (self.cube_pos - self.ee_pos).astype(np.float32)
+
         # our observations
         obs = np.concatenate((self.ee_pos, ee_ori_rpy, vec_ee_goal, euclidean_distance_cube_goal,
                               self.joint_pos_all, prev_action, self.current_joint_velocities,
-                              self.cube_pos, self.cube_ori), axis=None, dtype=np.float32)
+                              self.cube_pos, self.cube_ori,
+                              self.cube_linear_velocity, self.cube_angular_velocity, cube_rel_to_ee),
+                             axis=None, dtype=np.float32)
 
         if self.log_internal_state:
             rospy.loginfo(f"Observations --->: {obs}")
@@ -1172,7 +1197,7 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         Function to get a reachable goal
         """
         for i in range(max_tries):
-            goal = self.goal_space.sample()
+            goal = self._sample_box(self.goal_space)
             goal[2] = 0.015  # since the robot is mounted on a table
 
             if self.test_goal_pos(goal):
@@ -1187,7 +1212,7 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         """
         Function to get a random goal without checking
         """
-        random_goal = self.goal_space.sample()
+        random_goal = self._sample_box(self.goal_space)
         random_goal[2] = 0.015
 
         return random_goal
@@ -1198,7 +1223,7 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
 
         return: random_cube_pose
         """
-        random_cube_pose = self.goal_space.sample()
+        random_cube_pose = self._sample_box(self.goal_space)
         random_cube_pose[2] = 0.015
 
         return random_cube_pose
@@ -1316,6 +1341,16 @@ class RX200PushEnv(rx200_robot_sim.RX200RobotEnv):
         self.position_cube_max = rospy.get_param('/rx200/position_cube_max')
         self.rpy_cube_min = rospy.get_param('/rx200/rpy_cube_min')
         self.rpy_cube_max = rospy.get_param('/rx200/rpy_cube_max')
+        # Cube velocity bounds (finite-diff from cube pose) +
+        # cube-relative-to-EE position. Added to bring obs closer to
+        # FetchPush SOTA — cube velocities help with sliding/rolling
+        # dynamics, rel-to-EE helps with approach-then-push learning.
+        self.linear_velocity_cube_min = rospy.get_param('/rx200/linear_velocity_cube_min')
+        self.linear_velocity_cube_max = rospy.get_param('/rx200/linear_velocity_cube_max')
+        self.angular_velocity_cube_min = rospy.get_param('/rx200/angular_velocity_cube_min')
+        self.angular_velocity_cube_max = rospy.get_param('/rx200/angular_velocity_cube_max')
+        self.cube_rel_to_ee_min = rospy.get_param('/rx200/cube_rel_to_ee_min')
+        self.cube_rel_to_ee_max = rospy.get_param('/rx200/cube_rel_to_ee_max')
 
         # Goal space
         self.position_goal_max = rospy.get_param('/rx200/position_goal_max')

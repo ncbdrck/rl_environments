@@ -1,0 +1,186 @@
+vx300s: # namespace
+
+    # ******** Task Related parameters (not used by the env)
+    max_steps: 1000
+
+    # ******** Action Space — 6-DOF arm + 2 prismatic finger joints
+    # Joint limits taken from interbotix_xsarm_descriptions/urdf/vx300s.urdf.xacro
+    # (slight margin on waist / forearm_roll / wrist_rotate to avoid the URDF's
+    # pi_offset epsilon clamp).
+    min_joint_pos:
+      - -3.14  # waist
+      - -1.85  # shoulder         (URDF: -106°)
+      - -1.76  # elbow            (URDF: -101°)
+      - -3.14  # forearm_roll     (URDF: ±π)
+      - -1.87  # wrist_angle      (URDF: -107°)
+      - -3.14  # wrist_rotate
+
+    max_joint_pos:
+      - 3.14   # waist
+      - 1.26   # shoulder         (URDF: +72°)
+      - 1.61   # elbow            (URDF: +92°)
+      - 3.14   # forearm_roll
+      - 2.23   # wrist_angle      (URDF: +128°)
+      - 3.14   # wrist_rotate
+
+    # Reach mixin doesn't use this; kept so push/pnp YAMLs share shape.
+    min_joint_pos_grasp:
+      - -3.14
+      - -1.85
+      - -1.76
+      - -3.14
+      - -1.87
+      - -3.14
+      - 0.021   # left_finger    (URDF: lower=0.021 upper=0.057 — wider stroke than RX200's 0.015/0.037)
+      - -0.057  # right_finger   (URDF: lower=-0.057 upper=-0.021)
+
+    max_joint_pos_grasp:
+      - 3.14
+      - 1.26
+      - 1.61
+      - 3.14
+      - 2.23
+      - 3.14
+      - 0.057
+      - -0.021
+
+    # ******** Observation Space — vx300s reach is 750 mm, ~2× the RX200.
+    position_ee_max:
+      x: 0.85
+      y: 0.85
+      z: 0.85
+    position_ee_min:
+      x: -0.85
+      y: -0.85
+      z: -0.85
+
+    rpy_ee_max:
+      r: 6.2832
+      p: 6.2832
+      y: 6.2832
+    rpy_ee_min:
+      r: -6.2832
+      p: -6.2832
+      y: -6.2832
+
+    linear_distance_max:
+      x: 1.50
+      y: 1.50
+      z: 0.85
+    linear_distance_min:
+      x: -1.50
+      y: -1.50
+      z: -0.85
+
+    max_distance: 1.50  # diagonal of the workspace
+
+    # 9-element ordering kept to mirror RX200 (alphabetical), with
+    # forearm_roll inserted between elbow and gripper.
+    min_joint_angles:
+      - -1.76  # elbow
+      - -3.14  # forearm_roll
+      - -6.28  # gripper (continuous)
+      - 0.020  # left_finger    (obs margin around URDF 0.021 lower)
+      - -0.060 # right_finger   (obs margin around URDF -0.057 lower)
+      - -1.85  # shoulder
+      - -3.14  # waist
+      - -1.87  # wrist_angle
+      - -3.14  # wrist_rotate
+
+    max_joint_angles:
+      - 1.61   # elbow
+      - 3.14   # forearm_roll
+      - 6.28   # gripper (continuous)
+      - 0.060  # left_finger    (obs margin around URDF 0.057 upper)
+      - -0.020 # right_finger   (obs margin around URDF -0.021 upper)
+      - 1.26   # shoulder
+      - 3.14   # waist
+      - 2.23   # wrist_angle
+      - 3.14   # wrist_rotate
+
+    min_joint_vel:
+      - -10.0
+      - -10.0
+      - -10.0
+      - -5.0
+      - -5.0
+      - -10.0
+      - -10.0
+      - -10.0
+      - -10.0
+
+    max_joint_vel:
+      - 10.0
+      - 10.0
+      - 10.0
+      - 5.0
+      - 5.0
+      - 10.0
+      - 10.0
+      - 10.0
+      - 10.0
+
+    # ******** goal space (scaled up vs RX200 to use vx300s reach)
+    position_goal_max:
+      x: 0.50
+      y: 0.30
+      z: 0.50
+    position_goal_min:
+      x: 0.25
+      y: -0.30
+      z: 0.20
+
+    # ******** Workspace
+    workspace_max:
+      x: 0.85
+      y: 0.85
+      z: 0.85
+    workspace_min:
+      x: 0.10
+      y: -0.85
+      z: 0.10
+
+    # ******** achieved / desired goal
+    position_achieved_goal_max:
+      x: 0.85
+      y: 0.85
+      z: 0.85
+    position_achieved_goal_min:
+      x: -0.85
+      y: -0.85
+      z: 0.10
+
+    position_desired_goal_max:
+      x: 0.50
+      y: 0.30
+      z: 0.50
+    position_desired_goal_min:
+      x: 0.25
+      y: -0.30
+      z: 0.20
+
+    # ******** Gazebo Simulation parameters
+    gazebo_time_step: 0.001
+    gazebo_update_rate_multiplier: 1.0
+
+    # ******** Tolerance for the position of the goal
+    reach_tolerance: 0.02
+
+    # ******** Reward shaping
+    step_reward: -0.5
+    multiplier_dist_reward: 2.0
+    reached_goal_reward: 20
+    joint_limits_reward: -2.0
+    none_exe_reward: -5.0
+    not_within_goal_space_reward: -2.0
+
+    # ******** Safety (consumed by VX300SRobotEnv per-link FK check)
+    # vx300s base mounts flush with the table top (z=0). Same -0.005 m
+    # tolerance for the URDF base-mesh sitting fractionally below.
+    table_z: -0.005
+    safety_z_margin: 0.015
+    safety_z_margin_strict: 0.030
+    max_joint_delta: 0.5
+    max_joint_delta_strict: 0.15
+    joint_state_timeout_s: 0.5
+    ee_pose_timeout_s: 0.5

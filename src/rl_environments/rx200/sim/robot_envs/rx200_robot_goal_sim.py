@@ -29,16 +29,6 @@ from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
 from tf.transformations import euler_from_matrix
 
-"""
-Although it is best to register only the task environment, one can also register the robot environment. 
-This is not necessary, but we can see if this section 
-(Load the robot to gazebo and can control the robot with moveit or ros controllers)
-works by calling "gymnasium.make" this env.
-but you need to
-    1. run gazebo - gazebo_core.launch_gazebo(launch_roscore=False, paused=False, pub_clock_frequency=100, gui=True)
-    2. init a node - rospy.init_node('test_MyRobotGoalEnv')
-    3. run the env - env = gymnasium.make('RX200RobotGoalEnv-v0')
-"""
 register(
     id='RX200RobotGoalEnv-v0',
     entry_point='rl_environments.rx200.sim.robot_envs.rx200_robot_goal_sim:RX200RobotGoalEnv',
@@ -72,15 +62,9 @@ class RX200RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         """
         rospy.loginfo("Start Init RX200RobotGoalEnv Multiros!")
 
-        """
-        Change the ros/gazebo master
-        """
         if ros_port is not None:
             ros_common.change_ros_gazebo_master(ros_port=ros_port, gazebo_port=gazebo_port)
 
-        """
-        real time parameters
-        """
         self.real_time = real_time  # if True, the simulation will run in real time
 
         # we don't need to pause/unpause gazebo if we are running in real time
@@ -89,15 +73,9 @@ class RX200RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         else:
             unpause_pause_physics = True
 
-        """
-        Unpause Gazebo
-        """
         if not self.real_time:
             gazebo_core.unpause_gazebo()
 
-        """
-        Spawning the robot in Gazebo
-        """
         spawn_robot = True
 
         # location of the robot URDF file
@@ -131,9 +109,6 @@ class RX200RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         controllers_file = "reactorx200_controller.yaml"
         controllers_list = ["joint_state_controller", "arm_controller", "gripper_controller"]
 
-        """
-        Spawn other objects in Gazebo
-        """
         self.load_table = load_table
 
         if load_table:
@@ -158,37 +133,13 @@ class RX200RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
             if self.real_time:
                 gazebo_core.unpause_gazebo()
 
-        """
-        Set if the controllers in "controller_list" will be reset at the beginning of each episode, default is False.
-        """
         reset_controllers = False
 
-        """
-        Set the reset mode of gazebo at the beginning of each episode
-            "simulation": Reset gazebo simulation (Resets time) 
-            "world": Reset Gazebo world (Does not reset time) - default
-
-        resetting the "simulation" restarts the entire Gazebo environment, including all models and their positions, 
-        while resetting the "world" retains the models but resets their properties and states within the world        
-        """
         reset_mode = "world"
 
-        """
-        You can adjust the simulation step mode of Gazebo with two options:
-
-            1. Using Unpause, set action and Pause gazebo
-            2. Using the step function of Gazebo.
-
-        By default, the simulation step mode is set to 1 (gazebo pause and unpause services). 
-        However, if you choose simulation step mode 2, you can specify the number of steps Gazebo should take in each 
-        iteration. The default value for this is 1.
-        """
         sim_step_mode = 1
         num_gazebo_steps = 1
 
-        """
-        Set gazebo physics parameters to change the speed of the simulation
-        """
         gazebo_max_update_rate = None
         gazebo_timestep = None
 
@@ -200,24 +151,12 @@ class RX200RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
             gazebo_timestep = rospy.get_param('/rx200/gazebo_time_step')
             rospy.loginfo(f"Applied Gazebo time_step = {gazebo_timestep}")
 
-        """
-        kill rosmaster at the end of the env
-        """
         kill_rosmaster = True
 
-        """
-        kill gazebo at the end of the env
-        """
         kill_gazebo = True
 
-        """
-        Clean ros Logs at the end of the env
-        """
         clean_logs = False
 
-        """
-        Init MyRobotGoalEnv.
-        """
         super().__init__(
             spawn_robot=spawn_robot, urdf_pkg_name=urdf_pkg_name, urdf_file_name=urdf_file_name,
             urdf_folder=urdf_folder, urdf_xacro_args=urdf_xacro_args, namespace=namespace,
@@ -232,9 +171,6 @@ class RX200RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
             clean_logs=clean_logs, ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
             unpause_pause_physics=unpause_pause_physics, action_cycle_time=action_cycle_time)
 
-        """
-        Define ros publisher, subscribers and services for robot and sensors
-        """
         # ---------- joint state
         if namespace is not None and namespace != '/':
             self.joint_state_topic = namespace + "/joint_states"
@@ -266,15 +202,8 @@ class RX200RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
             self.kinect_rgb = Image()
             self.cv_image_rgb = None
 
-        """
-        Using the _check_connection_and_readiness method to check for the connection status of subscribers, publishers 
-        and services
-        """
         self._check_connection_and_readiness()
 
-        """
-        initialise controller and sensor objects here
-        """
         self.arm_joint_names = ["waist",
                                 "shoulder",
                                 "elbow",
@@ -320,32 +249,96 @@ class RX200RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
                                                          base_link=self.ref_frame,
                                                          end_link=self.ee_link)
 
+        # Per-link FK chains for the safety check in _check_action_links_safe.
+        # Each subchain spans base_link → that link, so PyKDL expects
+        # len(q) == kin.num_joints (NOT the full arm DOF). We store
+        # (kin, num_joints) so the safety check can slice the action vector
+        # correctly per link. Building these once at __init__ amortizes the
+        # URDF parse cost.
+        self._safety_kin = {}
+        for _link in self.SAFETY_CHECK_LINKS:
+            try:
+                _kin = KDLKinematics(urdf=self.pykdl_robot,
+                                     base_link=self.ref_frame,
+                                     end_link=_link)
+                self._safety_kin[_link] = (_kin, int(_kin.num_joints))
+            except Exception as _e:
+                rospy.logwarn(f"[SAFETY] kinematics setup failed for {_link}: {_e}")
+
+    # Arm links whose world z must stay above the table for the action to be
+    # safe. Order matches the URDF chain shoulder→ee_gripper. Links rigidly
+    # downstream of gripper_link are covered implicitly by checking
+    # gripper_link.
+    SAFETY_CHECK_LINKS = (
+        "rx200/shoulder_link",
+        "rx200/upper_arm_link",
+        "rx200/forearm_link",
+        "rx200/wrist_link",
+        "rx200/gripper_link",
+        "rx200/ee_gripper_link",
+    )
+
+    def _check_action_links_safe(self, joint_targets, current_joints=None):
+        """
+        Predict each arm link's world z under ``joint_targets`` and reject
+        the action if any link would dip below ``table_z + safety_z_margin``.
+        Also caps |target - current| per joint at ``max_joint_delta``.
+
+        Uses the per-link ``KDLKinematics`` instances cached in
+        ``self._safety_kin`` at __init__. Each subchain has its own joint
+        count, so we slice ``q[:n]`` before calling ``forward``.
+
+        Rosparams (all under ``/rx200/``, with sim/real variants):
+          table_z, safety_z_margin[_real], max_joint_delta[_real]
+
+        Returns
+        -------
+        (safe, reason) : (bool, Optional[str])
+        """
+        strict = bool(getattr(self, "enable_strict_safety", False))
+        table_z = float(rospy.get_param("/rx200/table_z", -0.005))
+        if strict:
+            margin = float(rospy.get_param("/rx200/safety_z_margin_strict", 0.030))
+            max_delta = float(rospy.get_param("/rx200/max_joint_delta_strict", 0.15))
+        else:
+            margin = float(rospy.get_param("/rx200/safety_z_margin", 0.015))
+            max_delta = float(rospy.get_param("/rx200/max_joint_delta", 0.5))
+        floor = table_z + margin
+
+        q = np.asarray(joint_targets, dtype=np.float64)
+
+        # Per-joint delta cap. Skipped when current pose is unknown.
+        if current_joints is not None:
+            cur = np.asarray(current_joints, dtype=np.float64)
+            if cur.shape == q.shape:
+                deltas = np.abs(q - cur)
+                if np.any(deltas > max_delta):
+                    idx = int(np.argmax(deltas))
+                    return False, f"joint[{idx}] delta {deltas[idx]:.3f} > {max_delta}"
+
+        # Per-link z check via cached pykdl subchains.
+        per_link_z = []
+        for link, (kin, n) in self._safety_kin.items():
+            try:
+                pose = kin.forward(q[:n])
+            except Exception as e:
+                return False, f"FK failed for {link}: {e}"
+            z = float(pose[2, 3])
+            per_link_z.append((link, z))
+            if z < floor:
+                return False, f"{link} predicted z={z:.3f} < floor={floor:.3f}"
+
+        if not hasattr(self, "_safety_log_count"):
+            self._safety_log_count = 0
+        if self._safety_log_count < 3:
+            self._safety_log_count += 1
+            zs = ", ".join(f"{l.rsplit('/', 1)[-1]}={z:.3f}" for l, z in per_link_z)
+            rospy.loginfo(f"[SAFETY] call #{self._safety_log_count}: floor={floor:.3f}, {zs}")
+
+        return True, None
+
     # ---------------------------------------------------
     #   Custom methods for the RX200 Robot Environment
-
-    """
-    Define the custom methods for the environment
-        * get_model_pose: Get the pose of an object in Gazebo
-        * spawn_cube_in_gazebo: Spawn a cube in Gazebo
-        * remove_cube_in_gazebo: Remove the cube from Gazebo
-        * fk_pykdl: Function to calculate the forward kinematics of the robot arm. We are using pykdl_utils.
-        * calculate_fk: Calculate the forward kinematics of the robot arm using the ros_kinematics package.
-        * calculate_ik: Calculate the inverse kinematics of the robot arm using the ros_kinematics package.
-        * joint_state_callback: Get the joint state of the robot
-        * move_arm_joints: Set a joint position target only for the arm joints using low-level ros controllers.
-        * move_gripper_joints: Set a joint position target only for the gripper joints using low-level ros controllers.
-        * smooth_trajectory: Smooth the trajectory by interpolating between the current and target positions.
-        * publish_trajectory: Publish the entire trajectory at once.
-        * set_trajectory_joints: Set a joint position target only for the arm joints.
-        * set_trajectory_ee: Set a pose target for the end effector of the robot arm.
-        * get_ee_pose: Get end-effector pose a geometry_msgs/PoseStamped message
-        * get_ee_rpy: Get end-effector orientation as a list of roll, pitch, and yaw angles.
-        * get_joint_angles: Get current joint angles of the robot arm - 5 elements
-        * check_goal: Check if the goal is reachable
-        * check_goal_reachable_joint_pos: Check if the goal is reachable with joint positions
-        * kinect_depth_callback: Callback function for kinect depth sensor
-        * kinect_rgb_callback: Callback function for kinect rgb sensor
-    """
 
     def get_model_pose(self, model_name="red_cube"):
         """

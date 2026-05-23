@@ -22,15 +22,6 @@ from realros.utils import ros_markers
 #     max_episode_steps=100,
 # )
 
-"""
-This is the v0 of the NE2 Reacher Task Environment made for the real robot.
-- uses the kinect v2 sensor or ZED2 camera
-- option to use vision sensors - depth and rgb images
-- action space is joint positions of the robot arm or xyz position of the end effector. No gripper control 
-- reward is sparse or dense
-- goal is to reach a goal position
-"""
-
 
 class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
     """
@@ -80,7 +71,7 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
                  rgb_obs_only: bool = False, normal_obs_only: bool = True, rgb_plus_normal_obs: bool = False,
                  rgb_plus_depth_plus_normal_obs: bool = False, debug: bool = False, action_speed: float = 0.5,
                  simple_dense_reward: bool = False, log_internal_state: bool = False, use_kinect: bool = False,
-                 use_zed2: bool = False, remote_ip: str = None, local_ip:str = None, multi_device_mode: bool = False,
+                 use_zed2: bool = False, use_wrist_camera: bool = False, remote_ip: str = None, local_ip:str = None, multi_device_mode: bool = False,
                  ):
 
         """
@@ -88,9 +79,6 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
         """
         ros_port = roscore_port
 
-        """
-        Initialise the env
-        """
         if multi_device_mode:
             if remote_ip is not None and local_ip is not None and ros_port is not None:
                 ros_common.change_ros_master_multi_device(remote_ip=remote_ip,
@@ -114,9 +102,6 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
             ros_common.change_ros_master(ros_port)
 
         else:
-            """
-            Check for roscore
-            """
             if ros_common.is_roscore_running() is False:
                 print("roscore is not running! Launching a new roscore!")
                 ros_port = self._launch_roscore(port=roscore_port)
@@ -129,31 +114,15 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
 
         rospy.init_node(self.node_name, anonymous=True)
 
-        """
-        Provide a description of the task.
-        """
         rospy.loginfo(f"Starting {self.node_name}")
 
-        """
-        Exit the program if
-        - (1/environment_loop_rate) is greater than action_cycle_time
-        """
         if (1.0 / environment_loop_rate) > action_cycle_time:
             rospy.logerr("The environment loop rate is greater than the action cycle time. Exiting the program!")
             rospy.signal_shutdown("Exiting the program!")
             exit()
 
-        """
-        log internal state - using rospy loginfo, logwarn, logerr
-        """
         self.log_internal_state = log_internal_state
 
-        """
-        Reward Architecture
-            * Dense - Default
-            * Sparse - -1 if not done and 1 if done
-            * All the others and misspellings - default to "Dense" reward
-        """
         if reward_type.lower() == "sparse":
             self.reward_arc = "Sparse"
 
@@ -168,58 +137,27 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
         # for simple, we only return the distance to the goal (negative Euclidean distance = -d)
         self.simple_dense_reward = simple_dense_reward
 
-        """
-        Use action as deltas
-        """
         self.delta_action = delta_action
         self.delta_coeff = delta_coeff
 
-        """
-        Use smoothing for actions
-        """
         self.use_smoothing = use_smoothing
         self.action_cycle_time = action_cycle_time
 
-        """
-        Action speed - Time to complete the trajectory
-        """
         self.action_speed = action_speed
 
-        """
-        Observation space
-            * RGB image only
-            * traditional observations only (default)
-            * RGB image and traditional observations (combined)
-            * RGB image, Depth image and traditional observations (combined)
-        """
         self.rgb_obs = rgb_obs_only
         self.normal_obs = normal_obs_only
         self.rgb_plus_normal_obs = rgb_plus_normal_obs
         self.rgb_plus_depth_plus_normal_obs = rgb_plus_depth_plus_normal_obs
 
-        """
-        Action space
-            * Joint action space (default)
-            * End effector action space
-        """
         self.ee_action_type = ee_action_type
 
-        """
-        Debug
-        """
         self.debug = debug
-
-        """
-        Load YAML param file
-        """
 
         # add to ros parameter server
         ros_common.ros_load_yaml(pkg_name="rl_environments", file_name="ned2_reach_task_config.yaml", ns="/")
         self._get_params()
 
-        """
-        Define the action space.
-        """
         # Joint action space or End effector action space
         # ROS and Gazebo often use double-precision (64-bit),
         # but we are using single-precision (32-bit) as it is typical for RL implementations.
@@ -238,26 +176,6 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
             # Joint action space
             self.action_space = spaces.Box(low=np.array(self.min_joint_values), high=np.array(self.max_joint_values),
                                            dtype=np.float32)
-
-        """
-        Define the observation space.
-
-        # typical observation
-        01. EE pos - 3
-        02. Vector to the goal (normalized linear distance) - 3
-        03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 6
-        05. Previous action - 6 or 3 (joint or ee)
-        06. Joint velocities - 6
-
-        total: (3x2) + 1 + (6 or 3) + (6x2) =  25 or 22
-
-        # depth image
-        480x640 32FC1
-
-        # rgb image
-        480x640X3 RGB images
-        """
 
         # ---- ee pos
         observations_high_ee_pos_range = np.array(
@@ -336,9 +254,6 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
             use_zed2 = False
             self.observation_space = self.observations
 
-        """
-        Goal space for sampling
-        """
         # ---- Goal pos
         high_goal_pos_range = np.array(
             np.array([self.position_goal_max["x"], self.position_goal_max["y"], self.position_goal_max["z"]]))
@@ -349,9 +264,6 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
         self.goal_space = spaces.Box(low=low_goal_pos_range, high=high_goal_pos_range, dtype=np.float32,
                                      seed=seed)
 
-        """
-        Workspace so we can check if the action is within the workspace
-        """
         # ---- Workspace
         high_workspace_range = np.array(
             np.array([self.workspace_max["x"], self.workspace_max["y"], self.workspace_max["z"]]))
@@ -362,17 +274,11 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
         # we don't need to set the seed here since we're not sampling from this space
         self.workspace_space = spaces.Box(low=low_workspace_range, high=high_workspace_range, dtype=np.float32)
 
-        """
-        Define subscribers/publishers and Markers as needed.
-        """
         self.goal_marker = ros_markers.RosMarker(frame_id="world", ns="goal", marker_type=2, marker_topic="goal_pos",
                                                  lifetime=30.0)
 
-        """
-        Init super class.
-        """
         super().__init__(ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt,
-                         action_cycle_time=action_cycle_time, use_kinect=use_kinect, use_zed2=use_zed2,
+                         action_cycle_time=action_cycle_time, use_kinect=use_kinect, use_zed2=use_zed2, use_wrist_camera=use_wrist_camera,
                          remote_ip=remote_ip, local_ip=local_ip, multi_device_mode=multi_device_mode)
 
         # for smoothing
@@ -410,9 +316,6 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
         self.movement_result = False
         self.within_goal_space = False
 
-        """
-        Finished __init__ method
-        """
         rospy.loginfo(f"Finished Init of {self.node_name}")
 
     # -------------------------------------------------------
@@ -624,6 +527,43 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
         #  we don't need to execute the loop until we reset the env
         if self.init_done:
 
+            # Close-race guard: rospy.Timer keeps firing during env.close()
+            # while MoveIt cleanup runs its 1s wait_for_message timeouts.
+            # Controllers get unspawned mid-close → joint_states stops →
+            # get_joint_angles returns []. Next tick's execute_action
+            # crashes on the delta-action broadcast (shape (0,) vs (6,)).
+            # Bail out cleanly if ROS is shutting down or joint state is
+            # stale.
+            if rospy.is_shutdown():
+                return
+            jv = getattr(self, "joint_values", None)
+            if jv is None or len(jv) < 6:
+                return
+
+            # Joint-state freshness gate (real-side only — sim has
+            # Gazebo's guaranteed clock). The parent robot env stamps
+            # ``_latest_joint_state_time`` on every /joint_states message;
+            # if no message has arrived within joint_state_timeout_s, the
+            # driver / cable is presumed dead. Stop the arm and skip the
+            # rest of this tick — re-executing the cached action against
+            # frozen state would publish stale targets indefinitely.
+            _js_now = rospy.get_time()
+            _js_last = getattr(self, "_latest_joint_state_time", None)
+            _js_threshold = getattr(self, "joint_state_timeout_s", 0.5)
+            if _js_last is None or (_js_now - _js_last) > _js_threshold:
+                rospy.logwarn_throttle(
+                    2.0,
+                    f"/joint_states stale (last update "
+                    f"{(_js_now - _js_last) if _js_last else 'never'}s ago, "
+                    f"threshold {_js_threshold}s). Stopping arm and "
+                    "skipping env_loop tick — check the niryo driver."
+                )
+                try:
+                    self.move_NED2_object.stop_arm()
+                except Exception:
+                    pass
+                return
+
             if self.debug:
                 if self.log_internal_state:
                     rospy.loginfo(f"Starting RL loop --->: {self.loop_counter}")
@@ -707,10 +647,25 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
                 IK_found, joint_positions = self.calculate_ik(target_pos=action, ee_ori=self.ee_ori)
 
                 if IK_found:
-                    # execute the trajectory - EE
-                    self.movement_result = self.move_arm_joints(q_positions=joint_positions,
-                                                                time_from_start=self.action_speed)
-                    self.within_goal_space = True
+                    # Per-link FK safety: workspace + IK-feasible doesn't
+                    # mean every link stays above the table/ground. The
+                    # arm can fold down with elbow/wrist below the
+                    # surface even when the EE target sits above. Reject
+                    # before publishing to the niryo driver — on hardware
+                    # a single bad target can ram the arm into the table.
+                    safe, reason = self._check_action_links_safe(
+                        joint_positions, current_joints=self.joint_values
+                    )
+                    if not safe:
+                        if self.log_internal_state:
+                            rospy.logwarn(f"[SAFETY] EE action rejected: {reason}")
+                        self.movement_result = False
+                        self.within_goal_space = False
+                    else:
+                        # execute the trajectory - EE
+                        self.movement_result = self.move_arm_joints(q_positions=joint_positions,
+                                                                    time_from_start=self.action_speed)
+                        self.within_goal_space = True
 
                 else:
                     if self.log_internal_state:
@@ -775,9 +730,22 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
 
             # check if the action is within the workspace
             if self.check_action_within_workspace(action):
-                # execute the trajectory - ros_controllers
-                self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
-                self.within_goal_space = True
+                # Per-link FK safety: see EE branch above. self.joint_values
+                # is refreshed at env_loop tick, so the delta cap can use it.
+                # On hardware this is the last guard before move_arm_joints
+                # publishes to the niryo driver.
+                safe, reason = self._check_action_links_safe(
+                    action, current_joints=self.joint_values
+                )
+                if not safe:
+                    if self.log_internal_state:
+                        rospy.logwarn(f"[SAFETY] joint action rejected: {reason}")
+                    self.movement_result = False
+                    self.within_goal_space = False
+                else:
+                    # execute the trajectory - ros_controllers
+                    self.movement_result = self.move_arm_joints(q_positions=action, time_from_start=self.action_speed)
+                    self.within_goal_space = True
 
             else:
                 if self.log_internal_state:
@@ -820,7 +788,7 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
         linear_dist_ee_goal = current_goal - self.ee_pos  # goal is box dtype and ee_pos is numpy.array. It is okay
 
         # --- 2. Vector to goal (we are giving only the direction vector)
-        vec_ee_goal = linear_dist_ee_goal / np.linalg.norm(linear_dist_ee_goal)
+        vec_ee_goal = self._safe_unit_vector(linear_dist_ee_goal)
 
         # --- 3. Euclidian distance
         euclidean_distance_ee_goal = scipy.spatial.distance.euclidean(self.ee_pos, current_goal)  # float
@@ -1042,7 +1010,7 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
         Function to get a reachable goal
         """
         for i in range(max_tries):
-            goal = self.goal_space.sample()
+            goal = self._sample_box(self.goal_space)
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1056,7 +1024,7 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
         """
         Function to get a random goal without checking
         """
-        return True, self.goal_space.sample()
+        return True, self._sample_box(self.goal_space)
 
     # not used
     def check_action_within_goal_space_fk(self, action):
@@ -1182,6 +1150,13 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
 
         # Tolerances
         self.reach_tolerance = rospy.get_param('/ned2/reach_tolerance')
+
+        # Real-side env_loop freshness threshold (seconds). If
+        # /joint_states hasn't published within this window, env_loop
+        # stops the arm and bails out of the current tick.
+        self.joint_state_timeout_s = float(
+            rospy.get_param('/ned2/joint_state_timeout_s', 0.5)
+        )
 
         # Variables related to rewards
         self.step_reward = rospy.get_param('/ned2/step_reward')

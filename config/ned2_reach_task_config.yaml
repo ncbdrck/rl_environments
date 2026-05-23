@@ -1,10 +1,13 @@
 ned2: #namespace
 
     # ******** Action Space
-    # Define the minimum and maximum joint values with the gripper open
+    # Define the minimum and maximum joint values with the gripper open.
+    # Values match URDF (niryo_ned2_param.urdf.xacro) limits in radians.
+    # max_joint_vel uses Niryo's official values (stepper v_max for j1-3
+    # from joints_interface docs; MoveIt joint_limits.yaml for j4-6).
     min_joint_pos:
       - -2.949
-      - -2.09
+      - -1.833  # joint_2 (URDF: -105° = -1.833 rad — was -2.09, past URDF limit)
       - -1.34
       - -2.089
       - -1.919
@@ -27,7 +30,10 @@ ned2: #namespace
     position_ee_min: # Minimum XYZ position for the EE
       x: -0.44
       y: -0.44
-      z: -0.0  # Near zero to prevent going below the table
+      z: -0.0  # Loose obs bound (allows tiny negative z from transient sim
+               # states without tripping gymnasium's obs-not-in-space check).
+               # The actual ground/table floor is enforced by workspace_min.z
+               # + the per-link FK safety check on Ned2RobotEnv.
 
     rpy_ee_max: # Maximum roll, pitch, and yaw (RPY) values for the EE
       r: 6.2832
@@ -52,7 +58,7 @@ ned2: #namespace
     # No gripper in this task, otherwise we would have 8 values for the gripper
     min_joint_angles:
       - -2.949
-      - -2.09
+      - -1.833  # joint_2 (URDF: -105° = -1.833 rad)
       - -1.34
       - -2.089
       - -1.919
@@ -77,13 +83,16 @@ ned2: #namespace
       - 0.0
 
     # No gripper in this task, otherwise we would have 8 values for the gripper
+    # Per Niryo's joints_interface docs (stepper v_max for joints 1-3) and
+    # MoveIt joint_limits.yaml (joints 4-6). Same values Niryo uses for
+    # their own sim.
     max_joint_vel:
-      - 0.785
-      - 0.5235
-      - 0.785
-      - 1.57
-      - 1.57
-      - 1.775
+      - 1.57    # joint_1 (stepper, v_max 1.571 rad/s)
+      - 1.047   # joint_2 (stepper, v_max 1.047 rad/s)
+      - 1.57    # joint_3 (stepper, v_max 1.571 rad/s)
+      - 3.14    # joint_4 (dynamixel, MoveIt cap)
+      - 3.14    # joint_5 (dynamixel, MoveIt cap)
+      - 3.14    # joint_6 (dynamixel, MoveIt cap)
 
     # ******** goal space
     position_goal_max: # Maximum XYZ position for the goal
@@ -107,8 +116,9 @@ ned2: #namespace
 
 
     # ******** achieved_goal and desired_goal
-
-    # In this task this is the EE pose
+    # For Reach, achieved_goal IS the EE pose, so z_min matches
+    # workspace_min.z (0.10). An achieved goal at z<0.10 would be
+    # unreachable under the safety contract.
     position_achieved_goal_max: # Maximum XYZ position for the achieved_goal
       x: 0.55
       y: 0.55
@@ -116,9 +126,9 @@ ned2: #namespace
     position_achieved_goal_min: # Minimum XYZ position for the achieved_goal
       x: -0.55
       y: -0.55
-      z: 0.05  # Near zero to prevent going below the table
+      z: 0.10
 
-    # In this task, this is the same as goal
+    # In this task, this is the same as goal-sampling range.
     position_desired_goal_max: # Maximum XYZ position for the desired_goal
       x: 0.40
       y: 0.40
@@ -126,7 +136,7 @@ ned2: #namespace
     position_desired_goal_min: # Minimum XYZ position for the desired_goal
       x: 0.15
       y: -0.40
-      z: 0.05
+      z: 0.10
 
 
     # ******** Gazebo Simulation parameters
@@ -150,4 +160,21 @@ ned2: #namespace
     joint_limits_reward: -2.0
     none_exe_reward: -5.0
     not_within_goal_space_reward: -2.0
+
+
+    # ******** Safety (consumed by Ned2RobotEnv per-link FK check)
+    # Same defaults as rx200_reach_task_config.yaml; see that file for the
+    # full rationale on each value. The Ned2 sim mounts the robot on the
+    # RX200 desk (spawned by Ned2RobotEnv from reactorx200_description's
+    # table model), so table_z here is in BASE_LINK frame (robot is at
+    # world z≈0.78 = desk top), and -0.005 means the FK floor is 5 mm
+    # below the desk top — gives the gripper a tiny tolerance for desk
+    # contact without flagging it as a safety violation.
+    table_z: -0.005
+    safety_z_margin: 0.015
+    safety_z_margin_strict: 0.030
+    max_joint_delta: 0.5
+    max_joint_delta_strict: 0.15
+    joint_state_timeout_s: 0.5
+    ee_pose_timeout_s: 0.5
 

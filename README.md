@@ -8,8 +8,9 @@ This repository contains sim and real prebuild environments (`Gymnasium-based`) 
 
 Robots
 - Trossen Robotics ReactorX-200 - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/rx200.html)
+- Trossen Robotics ViperX-300S - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/vx300s.html)
 - [Niryo Ned 2](https://niryo.com/product/educational-desktop-robotic-arm/) - [Documentation](https://docs.niryo.com/robots/ned2/) - [ROS Documentation](https://niryorobotics.github.io/ned_ros/)
-- [Universal Robots UR5](https://www.universal-robots.com/products/ur5-robot/) - [ROS Documentation](http://wiki.ros.org/universal_robot/Tutorials/Getting%20Started%20with%20a%20Universal%20Robot%20and%20ROS-Industrial) - [ROS Driver](https://github.com/UniversalRobots/Universal_Robots_ROS_Driver)
+- [Universal Robots UR5e](https://www.universal-robots.com/products/ur5-robot/) + Robotiq 2F-85 gripper - [ROS Documentation](http://wiki.ros.org/universal_robot)
 
 # Prerequisites
 
@@ -21,9 +22,10 @@ This script will install all the prerequisites mentioned above, including
 - ROS Noetic
 - RealROS
 - MultiROS
-- Rx200
+- Reactorx200
+- ViperX-300S
 - Ned2
-- UR5 robot repositories.
+- UR5e robot repositories.
 
 ```bash
 # Make the script executable
@@ -89,39 +91,76 @@ catkin_make
 source devel/setup.bash
 ```
 
-### 4. UR5 Robot Repository
+### 3a. Ned2 sim extras (`niryo_ned2_description_extras`)
 
-You can download the official repository of the UR5 robot from ROS-Industrial
+For Ned2 **simulation** envs (reach / push / pnp sim) we also need a
+small description-extras package that mounts the Ned2 on the same
+desk model the RX200 sim uses + adds a head-mount Kinect v2 + brings
+up `ros_control` so `niryo_robot_follow_joint_trajectory_controller`
+works in Gazebo. Mirrors the role of `reactorx200_description` for
+the RX200.
 
 ```bash
-# install using apt
-sudo apt install ros-noetic-universal-robots
-
-# or, you can download the source code
 cd ~/catkin_ws/src
-git clone -b $ROS_DISTRO-devel https://github.com/ros-industrial/universal_robot.git
-
-# Install the dependencies
-cd ~/catkin_ws/
-rosdep update
-rosdep install --from-paths src --ignore-src -r -y
-
-# Build the workspace
+git clone https://github.com/ncbdrck/niryo_ned2_description_extras.git
+cd ~/catkin_ws
 catkin_make
 source devel/setup.bash
 
-# if you are working with the real UR5 robot, you can also install the UR5 ROS driver
-sudo apt install ros-${ROS_DISTRO}-ur-robot-driver ros-${ROS_DISTRO}-ur-calibration
+# Verify the sim bring-up works standalone (no RL env):
+roslaunch niryo_ned2_description_extras ned2_gazebo.launch                # reach / push
+roslaunch niryo_ned2_description_extras ned2_gazebo.launch gripper:=true  # pnp
 ```
 
-if you need to visualize the robot in rviz, you can use the default URDF visualization package of ROS
+Not needed for **real** Ned2 envs — those bring up the Niryo driver
+via `niryo_robot_bringup` instead.
+
+### 3b. ViperX-300S sim extras (`viperx300s_description`)
+
+For VX300S **simulation** reach envs we use a local description-extras
+package that mirrors the RX200 tabletop setup: ViperX-300S on the cafe
+table, optional red cube, Kinect v2 mount, and `ros_control` controllers
+for Gazebo. Mirrors the role of `reactorx200_description` for the RX200.
+
 ```bash
-# install the package
-sudo apt-get install ros-noetic-urdf-tutorial
+cd ~/catkin_ws/src
+git clone https://github.com/ncbdrck/viperx300s_description.git
+cd ~/catkin_ws
+catkin_make
+source devel/setup.bash
 
-# launch the visualization using above -urdf-tutorial package
-roslaunch urdf_tutorial display.launch model:='$(find mycobot_description)/urdf/mycobot_280_m5/mycobot_280_m5.urdf'
+# Verify the standalone scene with table + red cube (no RL env):
+roslaunch viperx300s_description vx300s_gazebo.launch load_cube:=true
 ```
+
+Not needed for **real** VX300S envs — the Interbotix driver handles
+hardware bring-up.
+
+### 3c. UR5e sim extras (`ur5e_description_extras`)
+
+For UR5e **simulation** envs we ship a local description-extras
+package that wraps the upstream UR5e + Robotiq 2F-85 URDF, mounts the
+arm on a 4-legged `ur5_base` (~0.59 m) with a `cafe_table` next to it,
+adds a head-mount Kinect v2, and brings up `ros_control` with PID
+gains under `/ur5e/gazebo_ros_control/pid_gains`. Mirrors
+`viperx300s_description` for UR5e geometry.
+
+```bash
+cd ~/catkin_ws/src
+git clone https://github.com/ncbdrck/ur5e_description_extras.git
+cd ~/catkin_ws
+catkin_make
+source devel/setup.bash
+
+# Verify the standalone scene (ur5_base + cafe_table + arm + Kinect):
+roslaunch ur5e_description_extras ur5e_gazebo.launch
+```
+
+For real UR5e envs, the description-extras package is expected to
+ship a `ur5e_real.launch` wrapper that brings up `ur_robot_driver` +
+a Robotiq driver + MoveIt under `/ur5e`. Wire that up at the lab
+before running the `*_real-v0` envs.
+
 Please note that the instructions assume you are using Ubuntu 20.04 and ROS Noetic. If you are using a different operating system or ROS version, make sure to adapt the commands accordingly.
 
 # Installation
@@ -196,9 +235,16 @@ if __name__ == '__main__':
     # ros_common.clean_ros_logs()
 
     # --- normal environments
-    env = gym.make('RX200ReacherSim-v2', gazebo_gui=True, ee_action_type=False, seed=10,
+    env = gym.make('RX200ReacherSim-v0', gazebo_gui=True, ee_action_type=False, seed=10,
                    delta_action=True, environment_loop_rate=10.0, action_cycle_time=0.500,
                    use_smoothing=False, action_speed=0.100, reward_type="dense", log_internal_state=False)
+
+    # VX300S reach follows the same surface; pass load_cube=True when you
+    # want the tabletop red cube in the sim scene.
+    # env = gym.make('VX300SReacherSim-v0', gazebo_gui=True, ee_action_type=False, seed=10,
+    #                delta_action=True, environment_loop_rate=10.0, action_cycle_time=0.500,
+    #                use_smoothing=False, action_speed=0.100, reward_type="dense",
+    #                log_internal_state=False, load_cube=True)
 
     # # --- goal environments
     # env = gym.make('RX200ReacherGoalSim-v0', gazebo_gui=False, ee_action_type=False, seed=10,
@@ -241,20 +287,11 @@ if __name__ == '__main__':
 
 For another example of using the environment with [ROS-Based Stable Baselines3](https://github.com/ncbdrck/sb3_ros_support), you can refer to the [rl_training_validation repository](https://github.com/ncbdrck/rl_training_validation).
 
-The environments produced here are **standard gymnasium environments**. Any gymnasium-compatible RL library (Stable Baselines3, CleanRL, Tianshou, RLlib, or a custom training loop) works; `sb3_ros_support` is one convenience option, not a requirement.
+The environments are standard Gymnasium environments. Any Gymnasium-compatible RL library (Stable Baselines3, CleanRL, Tianshou, RLlib, custom loop) works; `sb3_ros_support` is one convenience option.
 
 ## Documentation
 
-Full ecosystem documentation lives under
-[`UniROS/docs/`](https://github.com/ncbdrck/UniROS/tree/main/docs)
-and covers:
-
-- The ready-made environment matrix (which robots and tasks are
-  currently implemented).
-- Creating new sim and real environments from the templates.
-- Training with any gymnasium-compatible RL library.
-- The joint sim+real training pattern (one policy, two domains).
-- API reference for every package in the ecosystem.
+Full ecosystem documentation: [uniros.readthedocs.io](https://uniros.readthedocs.io/).
 
 ## Contact
 
