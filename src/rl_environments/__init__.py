@@ -35,6 +35,9 @@ ALL_REACH_SIM_NAMES = [
     # ViperX-300 S reach.
     "VX300SReacherSim-v0",
     "VX300SReacherGoalSim-v0",
+    # UR5e reach.
+    "UR5eReacherSim-v0",
+    "UR5eReacherGoalSim-v0",
 ]
 
 ALL_PUSH_SIM_NAMES = [
@@ -242,6 +245,24 @@ register(
 register(
     id="VX300SReacherGoalSim-v0",
     entry_point="rl_environments.vx300s.sim.task_envs.reach.vx300s_reach_goal_sim:VX300SReacherGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ UR5e Reacher Multiros Environments ============================
+
+# UR5e + Robotiq 2F-85 reach (sim). Mounted on the ur5_base inside
+# ur5e_scene.world (cafe-table workspace next to the base). See
+# UR5eRobotEnv for the bring-up details (move_group under /ur5e,
+# gazebo_ros_control plugin namespace override).
+register(
+    id="UR5eReacherSim-v0",
+    entry_point="rl_environments.ur5e.sim.task_envs.reach.ur5e_reach_sim:UR5eReacherEnv",
+    max_episode_steps=100,
+)
+register(
+    id="UR5eReacherGoalSim-v0",
+    entry_point="rl_environments.ur5e.sim.task_envs.reach.ur5e_reach_goal_sim:UR5eReacherGoalEnv",
     max_episode_steps=100,
 )
 

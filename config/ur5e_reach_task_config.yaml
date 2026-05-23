@@ -1,0 +1,185 @@
+ur5e: # namespace
+
+    # ******** Task Related parameters (not used by the env)
+    max_steps: 1000
+
+    # ******** Action Space — 6 arm joints.
+    # UR5e xacro is invoked with joint_limited=true ±π on every joint,
+    # so the action space mirrors that.
+    # Order matches UR5eRobotEnv.arm_joint_names:
+    #   shoulder_pan, shoulder_lift, elbow, wrist_1, wrist_2, wrist_3
+    min_joint_pos:
+      - -3.14   # shoulder_pan
+      - -3.14   # shoulder_lift
+      - -3.14   # elbow
+      - -3.14   # wrist_1
+      - -3.14   # wrist_2
+      - -3.14   # wrist_3
+
+    max_joint_pos:
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+
+    # Reach mixin doesn't use this; kept so push/pnp YAMLs share shape.
+    # 6 arm + 1 Robotiq knuckle (the other finger joints follow via
+    # URDF mimic linkage). Knuckle stroke ≈ 0.0–0.8 rad.
+    min_joint_pos_grasp:
+      - -3.14
+      - -3.14
+      - -3.14
+      - -3.14
+      - -3.14
+      - -3.14
+      - 0.0    # robotiq_85_left_knuckle_joint
+    max_joint_pos_grasp:
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 0.8
+
+    # ******** Observation Space — UR5e reach is ~850 mm; the arm sits
+    # on a 0.59 m base, so EE z can range from ~0.0 (just above floor
+    # if folded) to ~1.5 m (fully extended up). Bounds are loose so
+    # transient sim states don't trip Gymnasium's obs-not-in-space check.
+    position_ee_max:
+      x: 1.20
+      y: 0.90
+      z: 1.50
+    position_ee_min:
+      x: -0.90
+      y: -0.90
+      z: 0.00
+
+    rpy_ee_max:
+      r: 6.2832
+      p: 6.2832
+      y: 6.2832
+    rpy_ee_min:
+      r: -6.2832
+      p: -6.2832
+      y: -6.2832
+
+    linear_distance_max:
+      x: 2.10
+      y: 1.80
+      z: 1.50
+    linear_distance_min:
+      x: -2.10
+      y: -1.80
+      z: -1.50
+
+    max_distance: 2.10  # diagonal of the reachable workspace
+
+    # joint_states publishes alphabetically — 7 joints for UR5e + Robotiq:
+    # elbow, knuckle, shoulder_lift, shoulder_pan, wrist_1, wrist_2, wrist_3
+    min_joint_angles:
+      - -3.14   # elbow_joint
+      -  0.0    # robotiq_85_left_knuckle_joint
+      - -3.14   # shoulder_lift_joint
+      - -3.14   # shoulder_pan_joint
+      - -3.14   # wrist_1_joint
+      - -3.14   # wrist_2_joint
+      - -3.14   # wrist_3_joint
+
+    max_joint_angles:
+      - 3.14
+      - 0.8
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+
+    min_joint_vel:
+      - -3.15
+      - -2.00
+      - -3.15
+      - -3.15
+      - -3.15
+      - -3.15
+      - -3.15
+
+    max_joint_vel:
+      - 3.15
+      - 2.00
+      - 3.15
+      - 3.15
+      - 3.15
+      - 3.15
+      - 3.15
+
+    # ******** goal space — over the cafe-table workspace.
+    # cafe_table is at world (0.7, 0, 0); top extends ~[0.24, 1.16]×[-0.46, 0.46]
+    # at z = 0.775. Goals are sampled above the table, within UR5e reach
+    # from the arm base at (0, 0, 0.59).
+    position_goal_max:
+      x: 0.80
+      y: 0.30
+      z: 1.10
+    position_goal_min:
+      x: 0.40
+      y: -0.30
+      z: 0.85
+
+    # ******** Workspace bounds (per-link FK safety check)
+    # x extends past the cafe-table to allow side-of-table approaches.
+    workspace_max:
+      x: 1.20
+      y: 0.85
+      z: 1.50
+    workspace_min:
+      x: -0.30
+      y: -0.85
+      z: 0.55  # just below the ur5_base top (0.59) so the arm can't dive
+
+    # ******** achieved / desired goal (goal-env only)
+    position_achieved_goal_max:
+      x: 1.20
+      y: 0.90
+      z: 1.50
+    position_achieved_goal_min:
+      x: -0.90
+      y: -0.90
+      z: 0.55
+
+    position_desired_goal_max:
+      x: 0.80
+      y: 0.30
+      z: 1.10
+    position_desired_goal_min:
+      x: 0.40
+      y: -0.30
+      z: 0.85
+
+    # ******** Gazebo
+    gazebo_time_step: 0.001
+    gazebo_update_rate_multiplier: 1.0
+
+    # ******** Goal tolerance
+    reach_tolerance: 0.05
+
+    # ******** Reward shaping
+    step_reward: -0.5
+    multiplier_dist_reward: 2.0
+    reached_goal_reward: 20
+    joint_limits_reward: -2.0
+    none_exe_reward: -5.0
+    not_within_goal_space_reward: -2.0
+
+    # ******** Safety (per-link FK check in UR5eRobotEnv).
+    # ur5_base top plate at z = 0.59; arm spawns there. Safety floor
+    # sits just below so the arm can't swing into the base.
+    table_z: 0.59
+    safety_z_margin: 0.015
+    safety_z_margin_strict: 0.030
+    max_joint_delta: 0.5
+    max_joint_delta_strict: 0.15
+    joint_state_timeout_s: 0.5
+    ee_pose_timeout_s: 0.5
