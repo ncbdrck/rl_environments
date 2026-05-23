@@ -51,6 +51,9 @@ ALL_PUSH_SIM_NAMES = [
     # ViperX-300 S push.
     "VX300SPushSim-v0",
     "VX300SPushGoalSim-v0",
+    # UR5e push.
+    "UR5ePushSim-v0",
+    "UR5ePushGoalSim-v0",
 ]
 
 ALL_PNP_SIM_NAMES = [
@@ -64,6 +67,9 @@ ALL_PNP_SIM_NAMES = [
     # ViperX-300 S PnP.
     "VX300SPnPSim-v0",
     "VX300SPnPGoalSim-v0",
+    # UR5e PnP.
+    "UR5ePnPSim-v0",
+    "UR5ePnPGoalSim-v0",
 ]
 
 ALL_REACH_REAL_NAMES = [
@@ -75,6 +81,9 @@ ALL_REACH_REAL_NAMES = [
     # ViperX-300 S reach real.
     "VX300SReacherReal-v0",
     "VX300SReacherGoalReal-v0",
+    # UR5e reach real.
+    "UR5eReacherReal-v0",
+    "UR5eReacherGoalReal-v0",
 ]
 
 ALL_PUSH_REAL_NAMES = [
@@ -86,6 +95,9 @@ ALL_PUSH_REAL_NAMES = [
     # ViperX-300 S push real.
     "VX300SPushReal-v0",
     "VX300SPushGoalReal-v0",
+    # UR5e push real.
+    "UR5ePushReal-v0",
+    "UR5ePushGoalReal-v0",
 ]
 
 ALL_PNP_REAL_NAMES = [
@@ -97,6 +109,9 @@ ALL_PNP_REAL_NAMES = [
     # ViperX-300 S PnP real.
     "VX300SPnPReal-v0",
     "VX300SPnPGoalReal-v0",
+    # UR5e PnP real.
+    "UR5ePnPReal-v0",
+    "UR5ePnPGoalReal-v0",
 ]
 
 
@@ -281,6 +296,20 @@ register(
 )
 
 
+# ============================ UR5e Push Multiros Environments ============================
+
+register(
+    id="UR5ePushSim-v0",
+    entry_point="rl_environments.ur5e.sim.task_envs.push.ur5e_push_sim:UR5ePushEnv",
+    max_episode_steps=100,
+)
+register(
+    id="UR5ePushGoalSim-v0",
+    entry_point="rl_environments.ur5e.sim.task_envs.push.ur5e_push_goal_sim:UR5ePushGoalEnv",
+    max_episode_steps=100,
+)
+
+
 # ============================ ViperX-300 S PnP Multiros Environments ============================
 
 register(
@@ -291,6 +320,20 @@ register(
 register(
     id="VX300SPnPGoalSim-v0",
     entry_point="rl_environments.vx300s.sim.task_envs.pnp.vx300s_pnp_goal_sim:VX300SPnPGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ UR5e PnP Multiros Environments ============================
+
+register(
+    id="UR5ePnPSim-v0",
+    entry_point="rl_environments.ur5e.sim.task_envs.pnp.ur5e_pnp_sim:UR5ePnPEnv",
+    max_episode_steps=100,
+)
+register(
+    id="UR5ePnPGoalSim-v0",
+    entry_point="rl_environments.ur5e.sim.task_envs.pnp.ur5e_pnp_goal_sim:UR5ePnPGoalEnv",
     max_episode_steps=100,
 )
 
@@ -440,5 +483,52 @@ register(
 register(
     id="VX300SPnPGoalReal-v0",
     entry_point="rl_environments.vx300s.real.task_envs.pnp.vx300s_pnp_goal_real:VX300SPnPGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ UR5e Reacher RealROS Environments ============================
+
+# UR5e + Robotiq 2F-85 reach (real). Mounted on the ur5_base; the env's
+# wrapper launch (ur5e_description_extras/launch/ur5e_real.launch) is
+# expected to bring up ur_robot_driver + Robotiq driver + MoveIt under
+# /ur5e. Bare URDF link names (base_link, ee_link); MoveIt SRDF group
+# "arm" + "gripper".
+register(
+    id="UR5eReacherReal-v0",
+    entry_point="rl_environments.ur5e.real.task_envs.reach.ur5e_reach_real:UR5eReacherEnv",
+    max_episode_steps=100,
+)
+register(
+    id="UR5eReacherGoalReal-v0",
+    entry_point="rl_environments.ur5e.real.task_envs.reach.ur5e_reach_goal_real:UR5eReacherGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ UR5e Push RealROS Environments ============================
+
+register(
+    id="UR5ePushReal-v0",
+    entry_point="rl_environments.ur5e.real.task_envs.push.ur5e_push_real:UR5ePushEnv",
+    max_episode_steps=100,
+)
+register(
+    id="UR5ePushGoalReal-v0",
+    entry_point="rl_environments.ur5e.real.task_envs.push.ur5e_push_goal_real:UR5ePushGoalEnv",
+    max_episode_steps=100,
+)
+
+
+# ============================ UR5e PnP RealROS Environments ============================
+
+register(
+    id="UR5ePnPReal-v0",
+    entry_point="rl_environments.ur5e.real.task_envs.pnp.ur5e_pnp_real:UR5ePnPEnv",
+    max_episode_steps=100,
+)
+register(
+    id="UR5ePnPGoalReal-v0",
+    entry_point="rl_environments.ur5e.real.task_envs.pnp.ur5e_pnp_goal_real:UR5ePnPGoalEnv",
     max_episode_steps=100,
 )

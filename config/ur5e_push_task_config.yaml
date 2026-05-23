@@ -1,0 +1,251 @@
+ur5e: # namespace
+
+    # ******** Task Related parameters (not used by the env)
+    max_steps: 1000
+
+    # ******** Action Space — 6 arm joints (push doesn't drive the gripper).
+    # UR5e xacro joint-limited to ±π on every joint.
+    # Order matches UR5eRobotEnv.arm_joint_names:
+    #   shoulder_pan, shoulder_lift, elbow, wrist_1, wrist_2, wrist_3
+    min_joint_pos:
+      - -3.14
+      - -3.14
+      - -3.14
+      - -3.14
+      - -3.14
+      - -3.14
+
+    max_joint_pos:
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+
+    # Push doesn't grasp; kept so shape matches reach / pnp configs.
+    # 6 arm + 1 Robotiq knuckle (mimic linkage drives other finger joints).
+    min_joint_pos_grasp:
+      - -3.14
+      - -3.14
+      - -3.14
+      - -3.14
+      - -3.14
+      - -3.14
+      - 0.0    # robotiq_85_left_knuckle_joint
+    max_joint_pos_grasp:
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 0.8
+
+    # ******** Observation Space.
+    # UR5e arm sits on a 0.59 m ur5_base; the cafe-table is at world
+    # (0.7, 0) with the top at z = 0.775. Bounds are loose so transient
+    # sim states don't trip Gymnasium's obs-not-in-space warning.
+    position_ee_max:
+      x: 1.20
+      y: 0.90
+      z: 1.50
+    position_ee_min:
+      x: -0.90
+      y: -0.90
+      z: 0.00
+
+    rpy_ee_max:
+      r: 6.2832
+      p: 6.2832
+      y: 6.2832
+    rpy_ee_min:
+      r: -6.2832
+      p: -6.2832
+      y: -6.2832
+
+    # Cube position in world frame. Cube rests on the cafe-table top
+    # (z = 0.775 + 0.02 half-edge = 0.795) but bounds slop so a knocked
+    # cube doesn't immediately fail the obs check.
+    position_cube_max:
+      x: 1.20
+      y: 0.90
+      z: 1.50
+    position_cube_min:
+      x: -0.90
+      y: -0.90
+      z: 0.00
+
+    rpy_cube_max:
+      r: 6.28
+      p: 6.28
+      y: 6.28
+    rpy_cube_min:
+      r: -6.28
+      p: -6.28
+      y: -6.28
+
+    # Finite-differenced cube velocity (sim + real share the code path).
+    # ±2 m/s leaves slack for transient sim spikes; nominal push slides
+    # at <1 m/s.
+    linear_velocity_cube_max:
+      x: 2.0
+      y: 2.0
+      z: 2.0
+    linear_velocity_cube_min:
+      x: -2.0
+      y: -2.0
+      z: -2.0
+
+    # ±20 rad/s covers a tumbling cube under push contact.
+    angular_velocity_cube_max:
+      r: 20.0
+      p: 20.0
+      y: 20.0
+    angular_velocity_cube_min:
+      r: -20.0
+      p: -20.0
+      y: -20.0
+
+    # Cube position relative to the EE. Derived from workspace span —
+    # the cube can be anywhere reachable.
+    cube_rel_to_ee_max:
+      x: 2.10
+      y: 1.80
+      z: 1.50
+    cube_rel_to_ee_min:
+      x: -2.10
+      y: -1.80
+      z: -1.50
+
+    # Not used by push (kept for shape compatibility).
+    linear_distance_max:
+      x: 2.10
+      y: 1.80
+      z: 1.50
+    linear_distance_min:
+      x: -2.10
+      y: -1.80
+      z: -1.50
+
+    max_distance: 2.10  # diagonal of the reachable workspace
+
+    # joint_states publishes alphabetically (7 joints for UR5e + Robotiq).
+    min_joint_angles:
+      - -3.14   # elbow_joint
+      -  0.0    # robotiq_85_left_knuckle_joint
+      - -3.14   # shoulder_lift_joint
+      - -3.14   # shoulder_pan_joint
+      - -3.14   # wrist_1_joint
+      - -3.14   # wrist_2_joint
+      - -3.14   # wrist_3_joint
+    max_joint_angles:
+      - 3.14
+      - 0.8
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+      - 3.14
+
+    min_joint_vel:
+      - -3.15
+      - -2.00
+      - -3.15
+      - -3.15
+      - -3.15
+      - -3.15
+      - -3.15
+    max_joint_vel:
+      - 3.15
+      - 2.00
+      - 3.15
+      - 3.15
+      - 3.15
+      - 3.15
+      - 3.15
+
+    # ******** Push goal sampling.
+    # Goals lie on the cafe-table top (z = 0.795). Bounds tightened
+    # vs reach so the agent learns within a more constrained zone.
+    position_goal_max:
+      x: 0.80
+      y: 0.30
+      z: 0.80
+    position_goal_min:
+      x: 0.40
+      y: -0.30
+      z: 0.785
+
+    # ******** Workspace (per-link FK safety check).
+    workspace_max:
+      x: 1.20
+      y: 0.85
+      z: 1.50
+    workspace_min:
+      x: -0.30
+      y: -0.85
+      z: 0.55  # just below the ur5_base top (0.59)
+
+    # ******** achieved / desired goal (goal-env variant tracks the CUBE).
+    # Cube sits on the table at z ≈ 0.795, so z floor is set to allow
+    # transient sim values.
+    position_achieved_goal_max:
+      x: 1.20
+      y: 0.90
+      z: 1.50
+    position_achieved_goal_min:
+      x: -0.90
+      y: -0.90
+      z: 0.00
+
+    position_desired_goal_max:
+      x: 0.80
+      y: 0.30
+      z: 0.80
+    position_desired_goal_min:
+      x: 0.40
+      y: -0.30
+      z: 0.785
+
+    # ******** Gazebo
+    gazebo_time_step: 0.001
+    gazebo_update_rate_multiplier: 1.0
+
+    # ******** Real-side cube tracking (consumed by UR5ePushReal /
+    # UR5ePushGoalReal). Subscribes to a vision pipeline publishing
+    # geometry_msgs/PoseStamped on cube_pose_topic; falls back to
+    # cube_init_pos and emits a throttled warning if stale.
+    cube_pose_timeout_s: 1.0
+    cube_init_pos: [0.4, -0.2, 0.795]
+
+    # ******** Goal tolerance
+    reach_tolerance: 0.05
+
+    # ******** Reward shaping
+    step_reward: -0.5
+    multiplier_dist_reward: 2.0
+    reached_goal_reward: 20
+    joint_limits_reward: -2.0
+    none_exe_reward: -5.0
+    not_within_goal_space_reward: -2.0
+
+    # ******** Safety (per-link FK check in UR5eRobotEnv).
+    # ur5_base top at z = 0.59; cafe-table top at z = 0.775. The check
+    # uses a base floor for every link, plus a higher table floor only
+    # when a link's XY lands over the cafe-table footprint.
+    base_z: 0.59
+    base_safety_z: 0.59
+    table_z: 0.59  # legacy alias used as fallback by older code
+    table_top_z: 0.775
+    table_center_x: 0.7
+    table_center_y: 0.0
+    table_size_x: 0.913
+    table_size_y: 0.913
+    table_xy_margin: 0.03
+    safety_z_margin: 0.015
+    safety_z_margin_strict: 0.030
+    max_joint_delta: 0.5
+    max_joint_delta_strict: 0.15
+    joint_state_timeout_s: 0.5
+    ee_pose_timeout_s: 0.5
