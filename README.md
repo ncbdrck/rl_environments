@@ -7,10 +7,10 @@
 This repository contains sim and real prebuild environments (`Gymnasium-based`) created using [RealROS](https://github.com/ncbdrck/realros) and [MultiROS](https://github.com/ncbdrck/multiros) frameworks. 
 
 Robots
-- Trossen Robotics ReactorX-200 - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/rx200.html)
-- Trossen Robotics ViperX-300S - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/vx300s.html)
+- [Trossen Robotics ReactorX-200](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/rx200.html) - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/rx200.html)
+- [Trossen Robotics ViperX-300S](https://www.trossenrobotics.com/viperx-300) - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/vx300s.html)
 - [Niryo Ned 2](https://niryo.com/product/educational-desktop-robotic-arm/) - [Documentation](https://docs.niryo.com/robots/ned2/) - [ROS Documentation](https://niryorobotics.github.io/ned_ros/)
-- [Universal Robots UR5e](https://www.universal-robots.com/products/ur5-robot/) + Robotiq 2F-85 gripper - [ROS Documentation](http://wiki.ros.org/universal_robot)
+- [Universal Robots UR5e](https://www.universal-robots.com/products/ur5-robot/) + [Robotiq 2F-85 gripper](https://robotiq.com/products/adaptive-grippers#Two-Finger-Gripper) - [ROS Documentation](http://wiki.ros.org/universal_robot)
 
 # Prerequisites
 
@@ -49,9 +49,8 @@ have no Ubuntu 20.04 driver.
 
 ### 1. UniROS
 
-This ROS repo requires **UniROS**. It has the `RealROS` to train or evaluate the tasks in the real world. 
-Then to simulate the tasks in Gazebo, it has `MultiROS` package. 
-
+This ROS repo requires **UniROS**. It has the `RealROS` package to train or evaluate the tasks in the real world. 
+Then, to simulate the tasks in Gazebo, it has the `MultiROS` package. 
 
 Please follow the instructions in the [UniROS repository](https://github.com/ncbdrck/UniROS) to install UniROS.
 
@@ -66,8 +65,6 @@ clones the full `interbotix_ros_manipulators`,
 `interbotix_ros_toolboxes`, and `interbotix_ros_core` trees, which
 between them provide everything both arms need.
 
-Official docs: [Interbotix RX200 software setup](https://docs.trossenrobotics.com/interbotix_xsarms_docs/ros_interface/ros1/software_setup.html).
-
 At the moment, these are the installation instructions on Ubuntu 20.04 / ROS Noetic:
 
 ```shell
@@ -78,9 +75,26 @@ chmod +x xsarm_amd64_install.sh
 ```
 **Note**: This will also install ROS Noetic (if not already installed) and create a new ROS workspace in your home directory if `-p` is not used. So source your workspace accordingly.
 
-### 2a. ViperX-300S sim extras (`viperx300s_description`)
+### 2a. ReactorX-200 sim extras (`reactorx200_description`)
+For Reactorx200 **simulation** envs, we use a local package that contains custom URDF with cafe
+table, optional red cube, Kinect v2 mount, and `ros_control` controllers
+for Gazebo.
 
-For VX300S **simulation** reach envs we use a local description-extras
+```bash
+cd ~/catkin_ws/src
+git clone https://github.com/ncbdrck/reactorx200_description.git
+cd ~/catkin_ws
+catkin_make
+source devel/setup.bash
+
+# Verify the standalone scene with table + red cube (no RL env):
+roslaunch reactorx200_description reactorx200_gazebo.launch 
+```
+
+
+### 2b. ViperX-300S sim extras (`viperx300s_description`)
+
+For VX300S **simulation** envs we use a local description-extras
 package that mirrors the RX200 tabletop setup: ViperX-300S on the cafe
 table, optional red cube, Kinect v2 mount, and `ros_control` controllers
 for Gazebo. Mirrors the role of `reactorx200_description` for the RX200.
