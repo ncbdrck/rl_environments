@@ -147,7 +147,7 @@ ur5e: # namespace
     position_achieved_goal_min:
       x: -0.90
       y: -0.90
-      z: 0.55
+      z: 0.00
 
     position_desired_goal_max:
       x: 0.80
@@ -174,9 +174,18 @@ ur5e: # namespace
     not_within_goal_space_reward: -2.0
 
     # ******** Safety (per-link FK check in UR5eRobotEnv).
-    # ur5_base top plate at z = 0.59; arm spawns there. Safety floor
-    # sits just below so the arm can't swing into the base.
-    table_z: 0.59
+    # ur5_base top plate is z=0.59 and the cafe table top is z=0.775.
+    # The safety check uses a base floor for every link, plus a higher
+    # table floor only when a link origin is over the cafe table footprint.
+    base_z: 0.59
+    base_safety_z: 0.59
+    table_z: 0.59  # legacy alias used as a fallback by older code
+    table_top_z: 0.775
+    table_center_x: 0.7
+    table_center_y: 0.0
+    table_size_x: 0.913
+    table_size_y: 0.913
+    table_xy_margin: 0.03
     safety_z_margin: 0.015
     safety_z_margin_strict: 0.030
     max_joint_delta: 0.5

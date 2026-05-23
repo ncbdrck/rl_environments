@@ -20,6 +20,7 @@ from multiros.envs import GazeboGoalEnv
 
 import rospy
 import rostopic
+from gazebo_msgs.srv import SetModelConfiguration
 from sensor_msgs.msg import JointState, Image
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -30,6 +31,7 @@ from multiros.utils import gazebo_core
 from multiros.utils import gazebo_models
 from multiros.utils.moveit_multiros import MoveitMultiros
 from multiros.utils import ros_common
+from multiros.utils import ros_controllers
 from multiros.utils import ros_kinematics
 
 from urdf_parser_py.urdf import URDF
@@ -50,16 +52,15 @@ class UR5eRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
 
     def __init__(self, ros_port: str = None, gazebo_port: str = None, gazebo_pid=None,
                  seed: int = None, real_time: bool = False, action_cycle_time=0.0,
-                 load_cube: bool = False, use_kinect: bool = False):
+                 load_cube: bool = False, load_table: bool = True, use_kinect: bool = False):
         rospy.loginfo("Start Init UR5eRobotGoalEnv Multiros")
 
         if ros_port is not None:
             ros_common.change_ros_gazebo_master(ros_port=ros_port, gazebo_port=gazebo_port)
 
         self.real_time = real_time
+        self.load_table = load_table
         unpause_pause_physics = not self.real_time
-        if not self.real_time:
-            gazebo_core.unpause_gazebo()
 
         spawn_robot = True
         urdf_pkg_name = "ur5e_description_extras"
@@ -74,11 +75,14 @@ class UR5eRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
 
         robot_pos_x = 0.0
         robot_pos_y = 0.0
-        robot_pos_z = 0.59
+        self.base_z = float(rospy.get_param("/ur5e/base_z", 0.59))
+        robot_pos_z = self.base_z
         robot_ori_w = 1.0
         robot_ori_x = 0.0
         robot_ori_y = 0.0
         robot_ori_z = 0.0
+        self.safe_init_pos = np.array([0.0, -1.5707, 1.5707, -1.5707, -1.5707, 0.0],
+                                      dtype=np.float64)
 
         controller_package_name = "ur5e_description_extras"
         controllers_file = "ur5e_controller.yaml"
@@ -96,8 +100,6 @@ class UR5eRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
                 model_name="red_cube", namespace=namespace,
                 pos_x=0.40, pos_y=-0.20, pos_z=0.795,
             )
-            if self.real_time:
-                gazebo_core.unpause_gazebo()
 
         reset_controllers = False
         reset_mode = "world"
@@ -118,12 +120,13 @@ class UR5eRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
             robot_model_name=robot_model_name, robot_ref_frame=robot_ref_frame,
             robot_pos_x=robot_pos_x, robot_pos_y=robot_pos_y, robot_pos_z=robot_pos_z, robot_ori_w=robot_ori_w,
             robot_ori_x=robot_ori_x, robot_ori_y=robot_ori_y, robot_ori_z=robot_ori_z,
-            controllers_file=controllers_file, controllers_list=controllers_list,
+            controllers_file=None, controllers_list=controllers_list,
             reset_controllers=reset_controllers, reset_mode=reset_mode, sim_step_mode=sim_step_mode,
             num_gazebo_steps=num_gazebo_steps, gazebo_max_update_rate=gazebo_max_update_rate,
             gazebo_timestep=gazebo_timestep, kill_rosmaster=True, kill_gazebo=True,
             clean_logs=False, ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
-            unpause_pause_physics=unpause_pause_physics, action_cycle_time=action_cycle_time,
+            unpause_pause_physics=unpause_pause_physics,
+            action_cycle_time=action_cycle_time if self.real_time else 0.0,
             controller_package_name=controller_package_name)
 
         self.joint_state_topic = (namespace + "/joint_states"
@@ -131,9 +134,10 @@ class UR5eRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         self.joint_state_sub = rospy.Subscriber(self.joint_state_topic, JointState,
                                                 self.joint_state_callback)
         self.joint_state = JointState()
-
-        ros_common.ros_launch_launcher(pkg_name="ur5e_description_extras",
-                                       launch_file_name="ur5e_move_group.launch")
+        self.joint_state_names = []
+        self.joint_pos_all = []
+        self.current_joint_velocities = []
+        self.current_joint_efforts = []
 
         self.use_kinect = use_kinect
         if self.use_kinect:
@@ -146,23 +150,31 @@ class UR5eRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
             self.kinect_rgb = Image()
             self.cv_image_rgb = None
 
-        self._check_connection_and_readiness()
-
         self.arm_joint_names = [
             "shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint",
             "wrist_1_joint", "wrist_2_joint", "wrist_3_joint",
         ]
         self.gripper_joint_names = ["robotiq_85_left_knuckle_joint"]
 
-        self.move_UR5E_object = MoveitMultiros(
-            arm_name='arm', gripper_name='gripper',
-            robot_description="ur5e/robot_description", ns="ur5e",
-            pause_gazebo=not self.real_time)
-
         self.arm_controller_pub = rospy.Publisher('/ur5e/arm_controller/command',
                                                   JointTrajectory, queue_size=10)
         self.gripper_controller_pub = rospy.Publisher('/ur5e/gripper_controller/command',
                                                       JointTrajectory, queue_size=10)
+
+        self._set_initial_model_configuration()
+        gazebo_core.unpause_gazebo()
+        self._spawn_ros_controllers(controllers_list, namespace)
+        self.move_arm_joints(self.safe_init_pos.astype(np.float32), time_from_start=0.1)
+
+        ros_common.ros_launch_launcher(pkg_name="ur5e_description_extras",
+                                       launch_file_name="ur5e_move_group.launch")
+
+        self._check_connection_and_readiness()
+
+        self.move_UR5E_object = MoveitMultiros(
+            arm_name='arm', gripper_name='gripper',
+            robot_description="ur5e/robot_description", ns="ur5e",
+            pause_gazebo=not self.real_time)
 
         self.ee_link = "ee_link"
         self.ref_frame = "base_link"
@@ -191,6 +203,38 @@ class UR5eRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
 
     # ---- helpers: same body as UR5eRobotEnv. Duplicated rather than
     # multi-inherited to keep the GazeboGoalEnv MRO simple.
+
+    def _set_initial_model_configuration(self) -> bool:
+        """Set Gazebo's UR5e joints to the folded safe pose immediately after spawn."""
+        try:
+            rospy.wait_for_service("/gazebo/set_model_configuration", timeout=10.0)
+            set_model_config = rospy.ServiceProxy("/gazebo/set_model_configuration",
+                                                  SetModelConfiguration)
+            resp = set_model_config(
+                model_name="ur5e",
+                urdf_param_name="/ur5e/robot_description",
+                joint_names=self.arm_joint_names,
+                joint_positions=[float(v) for v in self.safe_init_pos],
+            )
+        except Exception as exc:
+            rospy.logwarn(f"Failed to set UR5e safe initial joint pose: {exc}")
+            return False
+
+        if not resp.success:
+            rospy.logwarn(f"UR5e safe initial joint pose rejected: {resp.status_message}")
+            return False
+
+        rospy.loginfo("UR5e safe initial joint pose applied.")
+        return True
+
+    def _spawn_ros_controllers(self, controllers_list, namespace: str) -> bool:
+        """Start controllers after the safe pose is applied and Gazebo is unpaused."""
+        if ros_controllers.spawn_controllers(controllers_list, ns=namespace):
+            rospy.loginfo("UR5e controllers spawned successfully.")
+            return True
+
+        rospy.logerr("Failed to spawn UR5e controllers.")
+        return False
 
     def get_model_pose(self, model_name="red_cube", rpy=True):
         if not self.real_time:
@@ -244,15 +288,27 @@ class UR5eRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
     def _check_action_links_safe(self, joint_targets, current_joints=None):
         """See UR5eRobotEnv._check_action_links_safe for full rationale."""
         strict = bool(getattr(self, "enable_strict_safety", False))
-        table_z = float(rospy.get_param("/ur5e/table_z", 0.59))
+        base_z = float(rospy.get_param("/ur5e/base_z", self.base_z))
+        floor_z = float(rospy.get_param("/ur5e/base_safety_z",
+                                        rospy.get_param("/ur5e/table_z", base_z)))
+        table_top_z = float(rospy.get_param("/ur5e/table_top_z", 0.775))
+        table_center_x = float(rospy.get_param("/ur5e/table_center_x", 0.7))
+        table_center_y = float(rospy.get_param("/ur5e/table_center_y", 0.0))
+        table_size_x = float(rospy.get_param("/ur5e/table_size_x", 0.913))
+        table_size_y = float(rospy.get_param("/ur5e/table_size_y", 0.913))
+        table_xy_margin = float(rospy.get_param("/ur5e/table_xy_margin", 0.03))
         if strict:
             margin = float(rospy.get_param("/ur5e/safety_z_margin_strict", 0.030))
             max_delta = float(rospy.get_param("/ur5e/max_joint_delta_strict", 0.15))
         else:
             margin = float(rospy.get_param("/ur5e/safety_z_margin", 0.015))
             max_delta = float(rospy.get_param("/ur5e/max_joint_delta", 0.5))
-        floor = table_z + margin
-        base_z = 0.59
+        base_floor = floor_z + margin
+        table_floor = table_top_z + margin
+        table_x_min = table_center_x - (table_size_x / 2.0) - table_xy_margin
+        table_x_max = table_center_x + (table_size_x / 2.0) + table_xy_margin
+        table_y_min = table_center_y - (table_size_y / 2.0) - table_xy_margin
+        table_y_max = table_center_y + (table_size_y / 2.0) + table_xy_margin
 
         q = np.asarray(joint_targets, dtype=np.float64)
         if current_joints is not None:
@@ -268,9 +324,14 @@ class UR5eRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
                 pose = kin.forward(q[:n])
             except Exception as e:
                 return False, f"FK failed for {link}: {e}"
+            x_world = float(pose[0, 3])
+            y_world = float(pose[1, 3])
             z_world = float(pose[2, 3]) + base_z
-            if z_world < floor:
-                return False, f"{link} predicted z={z_world:.3f} < floor={floor:.3f}"
+            if z_world < base_floor:
+                return False, f"{link} predicted z={z_world:.3f} < base_floor={base_floor:.3f}"
+            over_table_xy = table_x_min <= x_world <= table_x_max and table_y_min <= y_world <= table_y_max
+            if over_table_xy and z_world < table_floor:
+                return False, f"{link} predicted z={z_world:.3f} < table_floor={table_floor:.3f}"
 
         return True, None
 
@@ -347,8 +408,9 @@ class UR5eRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         self.cv_image_rgb = cv2.cvtColor(cv_image_bgr, cv2.COLOR_BGR2RGB)
 
     def _check_joint_states_ready(self):
-        if not self.real_time:
-            gazebo_core.unpause_gazebo()
+        gazebo_core.unpause_gazebo()
+        msg = rospy.wait_for_message(self.joint_state_topic, JointState, timeout=10.0)
+        self.joint_state_callback(msg)
         rospy.logdebug(rostopic.get_topic_type(self.joint_state_topic, blocking=True))
         return True
 

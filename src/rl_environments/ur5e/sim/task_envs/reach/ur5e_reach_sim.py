@@ -37,7 +37,7 @@ class UR5eReacherEnv(ur5e_robot_sim.UR5eRobotEnv):
 
     Here
         * Action Space - Continuous (6 actions for joints or 3 xyz position of the end effector)
-        * Observation - Continuous (31/28 obs or rgb/depth image or a combination)
+        * Observation - Continuous (27/24 obs or rgb/depth image or a combination)
 
     Init Args:
         * launch_gazebo: Whether to launch Gazebo or not. If False, it is assumed that Gazebo is already running.
@@ -58,7 +58,8 @@ class UR5eReacherEnv(ur5e_robot_sim.UR5eRobotEnv):
         * normal_obs_only: Whether to use only the traditional observations or not.
         * rgb_plus_normal_obs: Whether to use RGB image and traditional observations or not.
         * rgb_plus_depth_plus_normal_obs: Whether to use RGB image, Depth image and traditional observations or not.
-        * load_table: Whether to load the table model or not.
+        * load_table: Whether to use the UR5e tabletop world or not.
+        * load_cube: Whether to load the red cube model or not.
         * debug: Whether to print debug messages or not.
         * action_speed: set the speed to complete the trajectory. default in 0.5 seconds
         * simple_dense_reward: Whether to use a simple dense reward or not.
@@ -68,12 +69,12 @@ class UR5eReacherEnv(ur5e_robot_sim.UR5eRobotEnv):
     """
 
     def __init__(self, launch_gazebo: bool = True, new_roscore: bool = True, roscore_port: str = None,
-                 gazebo_paused: bool = False, gazebo_gui: bool = False, seed: int = None, reward_type: str = "Dense",
+                 gazebo_paused: bool = True, gazebo_gui: bool = False, seed: int = None, reward_type: str = "Dense",
                  delta_action: bool = True, delta_coeff: float = 0.05, ee_action_type: bool = False,
                  environment_loop_rate: float = 10, action_cycle_time: float = 0.100,
                  use_smoothing: bool = False, rgb_obs_only: bool = False, normal_obs_only: bool = True,
                  rgb_plus_normal_obs: bool = False, rgb_plus_depth_plus_normal_obs: bool = False,
-                 load_table: bool = True, debug: bool = False, action_speed: float = 0.5,
+                 load_table: bool = True, load_cube: bool = False, debug: bool = False, action_speed: float = 0.5,
                  simple_dense_reward: bool = True, log_internal_state: bool = False, extra_smoothing: bool = False,
                  realtime_mode: bool = True):
 
@@ -293,7 +294,7 @@ class UR5eReacherEnv(ur5e_robot_sim.UR5eRobotEnv):
         # pauses physics around _set_action.
         super().__init__(ros_port=ros_port, gazebo_port=gazebo_port, gazebo_pid=gazebo_pid, seed=seed,
                          real_time=self.realtime_mode, action_cycle_time=action_cycle_time, use_kinect=use_kinect,
-                         load_table=load_table)
+                         load_table=load_table, load_cube=load_cube)
 
         # for smoothing
         if self.extra_smoothing:
@@ -372,7 +373,12 @@ class UR5eReacherEnv(ur5e_robot_sim.UR5eRobotEnv):
         # we need to wait for the movement to finish
         # we define the movement result here so that we can use it in the environment loop (we need it for dense reward)
         self.move_UR5E_object.stop_arm()
-        self.movement_result = self.move_UR5E_object.set_trajectory_joints(self.init_pos)
+        gazebo_core.pause_gazebo()
+        self._set_initial_model_configuration()
+        gazebo_core.unpause_gazebo()
+        self.movement_result = self.move_arm_joints(self.init_pos.astype(np.float32),
+                                                    time_from_start=self.action_speed)
+        rospy.sleep(max(float(self.action_speed), 0.1))
         if not self.movement_result:
             if self.log_internal_state:
                 rospy.logwarn("Homing failed!")
@@ -608,6 +614,14 @@ class UR5eReacherEnv(ur5e_robot_sim.UR5eRobotEnv):
             else:
                 self.move_UR5E_object.stop_arm()  # stop the arm if there is no action
 
+    def _wait_for_controller_motion(self):
+        if self.realtime_mode:
+            return
+
+        wait_time = max(float(self.action_speed), float(self.action_cycle_time), 0.0)
+        if wait_time > 0.0:
+            rospy.sleep(wait_time)
+
     def execute_action(self, action):
         """
         Function to apply an action to the robot.
@@ -796,6 +810,9 @@ class UR5eReacherEnv(ur5e_robot_sim.UR5eRobotEnv):
                 self.movement_result = False
                 self.within_goal_space = False
 
+        if self.movement_result:
+            self._wait_for_controller_motion()
+
     def sample_observation(self):
         """
         Function to get an observation from the environment.
@@ -804,11 +821,11 @@ class UR5eReacherEnv(ur5e_robot_sim.UR5eRobotEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 9
+        04. Current Joint values - 7
         05. Previous action - 6 or 3 (joint or ee)
-        06. Joint velocities - 9
+        06. Joint velocities - 7
 
-        total: (3x2) + 1 + (6 or 3) + (9x2) = 31 or 28
+        total: (3x2) + 1 + (6 or 3) + (7x2) = 27 or 24
 
         # depth image
         480x640 32FC1
@@ -852,6 +869,9 @@ class UR5eReacherEnv(ur5e_robot_sim.UR5eRobotEnv):
                 prev_action = self.joint_values.copy()
         else:
             prev_action = self.prev_action.copy()
+
+        if not getattr(self, "joint_pos_all", None) or not getattr(self, "current_joint_velocities", None):
+            self._check_joint_states_ready()
 
         # our observations
         obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
