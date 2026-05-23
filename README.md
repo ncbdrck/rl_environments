@@ -10,6 +10,7 @@ Robots
 - Trossen Robotics ReactorX-200 - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/rx200.html)
 - Trossen Robotics ViperX-300S - [Documentation](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/vx300s.html)
 - [Niryo Ned 2](https://niryo.com/product/educational-desktop-robotic-arm/) - [Documentation](https://docs.niryo.com/robots/ned2/) - [ROS Documentation](https://niryorobotics.github.io/ned_ros/)
+- [Universal Robots UR5e](https://www.universal-robots.com/products/ur5-robot/) + Robotiq 2F-85 gripper - [ROS Documentation](http://wiki.ros.org/universal_robot)
 
 # Prerequisites
 
@@ -23,7 +24,8 @@ This script will install all the prerequisites mentioned above, including
 - MultiROS
 - Reactorx200
 - ViperX-300S
-- Ned2 robot repositories.
+- Ned2
+- UR5e robot repositories.
 
 ```bash
 # Make the script executable
@@ -133,6 +135,31 @@ roslaunch viperx300s_description vx300s_gazebo.launch load_cube:=true
 
 Not needed for **real** VX300S envs — the Interbotix driver handles
 hardware bring-up.
+
+### 3c. UR5e sim extras (`ur5e_description_extras`)
+
+For UR5e **simulation** envs we ship a local description-extras
+package that wraps the upstream UR5e + Robotiq 2F-85 URDF, mounts the
+arm on a 4-legged `ur5_base` (~0.59 m) with a `cafe_table` next to it,
+adds a head-mount Kinect v2, and brings up `ros_control` with PID
+gains under `/ur5e/gazebo_ros_control/pid_gains`. Mirrors
+`viperx300s_description` for UR5e geometry.
+
+```bash
+cd ~/catkin_ws/src
+git clone https://github.com/ncbdrck/ur5e_description_extras.git
+cd ~/catkin_ws
+catkin_make
+source devel/setup.bash
+
+# Verify the standalone scene (ur5_base + cafe_table + arm + Kinect):
+roslaunch ur5e_description_extras ur5e_gazebo.launch
+```
+
+For real UR5e envs, the description-extras package is expected to
+ship a `ur5e_real.launch` wrapper that brings up `ur_robot_driver` +
+a Robotiq driver + MoveIt under `/ur5e`. Wire that up at the lab
+before running the `*_real-v0` envs.
 
 Please note that the instructions assume you are using Ubuntu 20.04 and ROS Noetic. If you are using a different operating system or ROS version, make sure to adapt the commands accordingly.
 
