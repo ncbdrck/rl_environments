@@ -39,6 +39,12 @@ rl_training_validation). It refuses to run on anything other than
 Ubuntu 20.04 because ROS Noetic doesn't officially support other
 distros.
 
+**Don't have Ubuntu 20.04?** A Docker image is shipped under
+[`docker/`](docker/) — see [`docker/README.md`](docker/README.md)
+for build / run / GPU / hardware-passthrough instructions. Works on
+Ubuntu 22.04 / 24.04 hosts, on WSL2, and on machines with GPUs that
+have no Ubuntu 20.04 driver.
+
 ## Option 2: Manual Installation of Prerequisites
 
 ### 1. UniROS
