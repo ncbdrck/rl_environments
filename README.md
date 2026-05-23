@@ -16,27 +16,28 @@ Robots
 
 Before installing this package, make sure you have the following prerequisites:
 
-## Option 1: Installation of all the packages including ROS Noetic 
+## Option 1: One-shot installer (recommended for fresh setups)
 
-This script will install all the prerequisites mentioned above, including 
-- ROS Noetic
-- RealROS
-- MultiROS
-- Reactorx200
-- ViperX-300S
-- Ned2
-- UR5e robot repositories.
+If you're starting fresh on Ubuntu 20.04, run the bootstrap installer
+that ships in this repo (and identically in every other ecosystem
+repo: UniROS, MultiROS, RealROS, sb3_ros_support,
+rl_training_validation). It installs ROS Noetic, UniROS (with
+MultiROS + RealROS as submodules), sb3_ros_support, this package
+plus all 4 robots' vendor packages + supporting description-extras
++ cube tracker, and rl_training_validation.
 
 ```bash
-# Make the script executable
-chmod +x install_ros_rl.sh
-
-# Run the script interactively
-./install_ros_rl.sh
-
-# Or, run the script in non-interactive mode
-./install_ros_rl.sh -n
+git clone https://github.com/ncbdrck/rl_environments.git /tmp/uniros_bootstrap
+bash /tmp/uniros_bootstrap/install_uniros_stack.sh                # interactive
+bash /tmp/uniros_bootstrap/install_uniros_stack.sh -y             # unattended
+bash /tmp/uniros_bootstrap/install_uniros_stack.sh -p ~/my_ws -y  # custom path
 ```
+
+The script asks once whether to install all components or pick per-
+component (ROS / UniROS / sb3_ros_support / rl_environments /
+rl_training_validation). It refuses to run on anything other than
+Ubuntu 20.04 because ROS Noetic doesn't officially support other
+distros.
 
 ## Option 2: Manual Installation of Prerequisites
 
