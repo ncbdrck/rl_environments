@@ -337,16 +337,12 @@ class RX200RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
 
         Args:
             model_name: name of the object whose pose is to be retrieved
-            rpy: True if the orientation is to be returned as euler
-                angles (default: True)
+            rpy: True if the orientation is to be returned as euler angles (default: True)
 
         Returns:
             success: True if the Gazebo lookup succeeded
-            position: object position as a numpy float32 (x, y, z) array,
-                or None on failure
-            orientation: object orientation as a numpy float32 array
-                (roll, pitch, yaw in radians when rpy=True, otherwise
-                quaternion (x, y, z, w)), or None on failure
+            position: position of the object as a numpy float32 array, or None on failure
+            orientation: orientation as a numpy float32 array (rpy or quaternion), or None on failure
         """
 
         if not self.real_time:

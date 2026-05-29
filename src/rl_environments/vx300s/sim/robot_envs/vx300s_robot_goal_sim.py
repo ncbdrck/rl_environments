@@ -360,17 +360,13 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         Get the pose of an object in Gazebo.
 
         Args:
-            model_name: name of the object whose pose is to be retrieved.
-            rpy: True (default) returns the orientation as Euler angles
-                (roll, pitch, yaw) in radians; False returns the quaternion
-                (x, y, z, w).
+            model_name: name of the object whose pose is to be retrieved
+            rpy: True if the orientation is to be returned as euler angles (default: True)
 
         Returns:
-            success: True if Gazebo's GetModelState call succeeded.
-            position: numpy float32 array (x, y, z) in metres, relative to
-                ``vx300s/base_link``.
-            orientation: numpy float32 array — (rpy) if ``rpy=True``, else
-                (x, y, z, w) quaternion. On failure both arrays are zeros.
+            success: True if the Gazebo lookup succeeded
+            position: position of the object as a numpy float32 array, or None on failure
+            orientation: orientation as a numpy float32 array (rpy or quaternion), or None on failure
         """
 
         if not self.real_time:
