@@ -601,56 +601,48 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         """
         Function to check if the episode is terminated.
 
+        Pure function of (achieved_goal, desired_goal): returns True
+        iff the achieved EE position is within ``reach_tolerance`` of
+        the desired goal. Supports both the scalar live-step call
+        (``ag``/``dg`` shape ``(3,)``) and the batched HER-style call
+        (shape ``(N, 3)``) via ``axis=-1``. Does not read or mutate
+        any cached env-loop state; the env loop / step path still
+        populates ``info['is_success']`` independently.
+
         Args:
-            achieved_goal: EE position
-            desired_goal: Reach Goal
-            info (dict): Additional information about the environment.
+            achieved_goal: EE position (single or batched).
+            desired_goal: Reach goal (single or batched).
+            info: Additional information about the environment.
 
         Returns:
-            A boolean value indicating whether the episode has ended
-            (e.g. because a goal has been reached or a failure condition has been triggered)
+            A boolean (scalar or numpy array) — True where the goal is
+            within ``reach_tolerance``.
         """
-        terminated = self.terminated_r
-        self.info = self.info_r  # we can use this to log the success rate in stable baselines3
-
-        # check if self.info have the is_success key
-        # double-checking here
-        if "is_success" not in self.info:
-            if terminated:
-                self.info["is_success"] = True
-            else:
-                self.info["is_success"] = False
-
-        # incase we don't have a done yet for real time envs
-        # unnecessary to check since we never set the terminated to None
-        if terminated is None:
-            terminated = self.check_if_done()
-
-            if terminated:
-                self.info["is_success"] = True  # explicitly set the success rate
-            else:
-                self.info["is_success"] = False
-
-        return terminated
+        diff = np.asarray(achieved_goal, dtype=np.float32) - np.asarray(desired_goal, dtype=np.float32)
+        distance = np.linalg.norm(diff, axis=-1)
+        return distance <= self.reach_tolerance
 
     def compute_truncated(self, achieved_goal, desired_goal, info):
         """
         Function to check if the episode is truncated.
 
-        Mainly hard coded here since we are using a wrapper that sets the max number of steps and truncates the episode.
+        Truncation is driven by the registered ``max_episode_steps`` /
+        ``TimeLimitWrapper`` outside this env, so this is constantly
+        False. Kept pure (no cached-state read, no ``self.info``
+        mutation) so a batched call returns a consistent result.
 
         Args:
-            achieved_goal: EE position
-            desired_goal: Reach Goal
-            info (dict): Additional information about the environment.
+            achieved_goal: EE position (single or batched).
+            desired_goal: Reach goal (single or batched).
+            info: Additional information about the environment.
 
         Returns:
-            A boolean value indicating whether the episode has been truncated
-            (e.g. because the maximum number of steps has been reached)
+            A boolean (scalar or numpy array) — always False.
         """
-        truncated = self.truncated_r
-
-        return truncated
+        ag = np.asarray(achieved_goal)
+        if ag.ndim == 1:
+            return False
+        return np.zeros(ag.shape[0], dtype=bool)
 
     # -------------------------------------------------------
     #   Include any custom methods available for the MyTaskEnv class
@@ -894,11 +886,10 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         current_goal = self.reach_goal
 
         # --- 1. Get EE position
-        ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z],
-                               dtype=np.float32)
-        self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])
+        ee = self.fk_pykdl(self.joint_pos_all)
+        if ee is None:
+            ee = self.ee_pos
+        self.ee_pos = np.asarray(ee, dtype=np.float32)
 
         # --- Linear distance to the goal
         linear_dist_ee_goal = current_goal - self.ee_pos  # goal is box dtype and ee_pos is numpy.array. It is okay
@@ -912,7 +903,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         # --- Get Current Joint values - only for the joints we are using
         #  we need this for delta actions
         # self.joint_values = self.current_joint_positions.copy()  # Get a float list
-        self.joint_values = self.get_joint_angles()  # Get a float list
+        self.joint_values = list(self.joint_pos_all)  # Get a float list
         # we don't need to convert this to numpy array since we concat using numpy below
 
         if self.prev_action is None:

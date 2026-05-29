@@ -560,15 +560,16 @@ class RX200PnPEnv(rx200_robot_sim.RX200RobotEnv):
         self.within_goal_space = True
 
         # Episode-start prev_action: arm portion (ee_pos or init_pos) +
-        # gripper at its open value (gripper_max). PnP episodes start with
-        # the gripper open; the agent commands close when contacting the
-        # cube.
+        # gripper at its closed value. _set_init_params commands
+        # ``init_close_gripper`` on the actual hardware/sim above, so
+        # the obs report must match (the gripper component of the
+        # action space encodes closed = gripper_min, open = gripper_max).
         if self.ee_action_type:
             self.prev_action = np.concatenate(
-                [self.ee_pos, [self.gripper_max]]).astype(np.float32)
+                [self.ee_pos, [self.gripper_min]]).astype(np.float32)
         else:
             self.prev_action = np.concatenate(
-                [self.init_pos, [self.gripper_max]]).astype(np.float32)
+                [self.init_pos, [self.gripper_min]]).astype(np.float32)
 
         #  --------------- Set init values for the environment loop
         # We can start the environment loop now
@@ -1011,12 +1012,12 @@ class RX200PnPEnv(rx200_robot_sim.RX200RobotEnv):
         self.cube_marker.publish()
 
         # --- 1. Get EE position
-        ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        ee = self.fk_pykdl(self.joint_pos_all)
+        if ee is None:
+            ee = self.ee_pos
+        self.ee_pos = np.asarray(ee, dtype=np.float32)
 
         # --- 2. Get EE orientation
-        self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # we need this for IK
         ee_ori_rpy = self.quaternion_to_euler(self.ee_ori)
 
         # --- Linear distance to the goal
@@ -1031,21 +1032,22 @@ class RX200PnPEnv(rx200_robot_sim.RX200RobotEnv):
         # --- Get Current Joint values - only for the joints we are using
         #  we need this for delta actions
         # self.joint_values = self.current_joint_positions.copy()  # Get a float list
-        self.joint_values = self.get_joint_angles()  # Get a float list
+        self.joint_values = list(self.joint_pos_all)  # Get a float list
         # we don't need to convert this to numpy array since we concat using numpy below
 
         # --- 6. Get the previous action
         if self.prev_action is None:
-            # Bootstrap: assume gripper is at max (open) on the first tick.
-            # Once the agent's first action lands, self.prev_action is set
-            # to the actual 6/4-DOF command in _set_action.
+            # Bootstrap: match the closed-gripper state commanded by
+            # _set_init_params (init_close_gripper); once the agent's
+            # first action lands, self.prev_action is set to the actual
+            # 6/4-DOF command in _set_action.
             if self.ee_action_type:
                 prev_action = np.concatenate(
-                    [self.ee_pos, [self.gripper_max]]).astype(np.float32)
+                    [self.ee_pos, [self.gripper_min]]).astype(np.float32)
             else:
                 prev_action = np.concatenate(
                     [np.asarray(self.joint_values, dtype=np.float32),
-                     [self.gripper_max]]).astype(np.float32)
+                     [self.gripper_min]]).astype(np.float32)
         else:
             prev_action = self.prev_action.copy()
 

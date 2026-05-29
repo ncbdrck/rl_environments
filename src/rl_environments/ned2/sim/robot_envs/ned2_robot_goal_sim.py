@@ -29,7 +29,7 @@ from multiros.utils import ros_kinematics
 
 from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
-from tf.transformations import euler_from_matrix
+from tf.transformations import euler_from_matrix, euler_from_quaternion
 
 register(
     id='NED2RobotGoalBaseSimEnv-v0',
@@ -386,15 +386,22 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
 
         return True, None
 
-    def get_model_pose(self, model_name="red_cube"):
+    def get_model_pose(self, model_name="red_cube", rpy=True):
         """
-        Get the pose of an object in Gazebo
+        Get the pose of an object in Gazebo.
 
         Args:
             model_name: name of the object whose pose is to be retrieved
+            rpy: True if the orientation is to be returned as euler
+                angles (default: True)
 
         Returns:
-            pose: pose of the object as a geometry_msgs/PoseStamped message
+            success: True if the Gazebo lookup succeeded
+            position: object position as a numpy float32 (x, y, z) array,
+                or None on failure
+            orientation: object orientation as a numpy float32 array
+                (roll, pitch, yaw in radians when rpy=True, otherwise
+                quaternion (x, y, z, w)), or None on failure
         """
 
         if not self.real_time:
@@ -409,8 +416,23 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         if not self.real_time:
             gazebo_core.pause_gazebo()
 
-        # pose contains the position and orientation of the object
-        return pose
+        if success:
+            if rpy:
+                orientation = euler_from_quaternion(
+                    [pose.orientation.x, pose.orientation.y,
+                     pose.orientation.z, pose.orientation.w])
+                orientation = np.array(orientation, dtype=np.float32)
+            else:
+                orientation = np.array([pose.orientation.x, pose.orientation.y,
+                                        pose.orientation.z, pose.orientation.w],
+                                       dtype=np.float32)
+
+            position = np.array([pose.position.x, pose.position.y, pose.position.z],
+                                dtype=np.float32)
+
+            return success, position, orientation
+
+        return success, None, None
 
     def spawn_cube_in_gazebo(self, model_pos_x, model_pos_y):
         """
@@ -525,18 +547,22 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         if joint_state is not None:
             self.joint_state = joint_state
 
-            # joint names - not using this
+            # joint names — used below to pull positions/velocities by
+            # name rather than trusting the driver's publish order.
             self.joint_state_names = list(joint_state.name)
 
-            # get the current joint positions - using this
-            joint_pos_all = list(joint_state.position)
-            self.joint_pos_all = joint_pos_all
+            # Build the obs-facing joint vectors by NAME lookup so a
+            # driver change that re-orders /joint_states (or adds an
+            # extra finger / mimic joint) doesn't silently scramble the
+            # observation. The expected joint set is arm + (gripper
+            # when the gripper URDF is loaded).
+            wanted = list(self.arm_joint_names) + list(self.gripper_joint_names)
+            name_to_idx = {n: i for i, n in enumerate(joint_state.name)}
+            indices = [name_to_idx[n] for n in wanted if n in name_to_idx]
 
-            # get the current joint velocities - we are using this
-            self.current_joint_velocities = list(joint_state.velocity)
-
-            # get the current joint efforts - not using this
-            self.current_joint_efforts = list(joint_state.effort)
+            self.joint_pos_all = [joint_state.position[i] for i in indices]
+            self.current_joint_velocities = [joint_state.velocity[i] for i in indices]
+            self.current_joint_efforts = [joint_state.effort[i] for i in indices]
 
     def move_arm_joints(self, q_positions: np.ndarray, time_from_start: float = 0.5) -> bool:
         """

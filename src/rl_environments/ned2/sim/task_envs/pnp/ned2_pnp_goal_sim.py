@@ -1033,23 +1033,14 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
             current_goal = self.pnp_goal
 
         # --- Get the current cube position and orientation.
-        # GoalEnv variant of the NED2 robot env returns a single
-        # geometry_msgs/Pose (not the 3-tuple the standard robot env
-        # gives). Adapt it inline here: pose=None means lookup failed.
-        # The NED2 robot env's get_model_pose defaults to
-        # model_name="red_cube".
-        cube_pose_msg = self.get_model_pose()
-        if cube_pose_msg is None:
-            cube_pose_done = False
-        else:
-            cube_pose_done = True
-            self.cube_pos = np.array([cube_pose_msg.position.x,
-                                      cube_pose_msg.position.y,
-                                      cube_pose_msg.position.z], dtype=np.float32)
-            self.cube_ori = np.array(tf.transformations.euler_from_quaternion([
-                cube_pose_msg.orientation.x, cube_pose_msg.orientation.y,
-                cube_pose_msg.orientation.z, cube_pose_msg.orientation.w]),
-                dtype=np.float32)
+        # get_model_pose returns (success, position, orientation_rpy)
+        # where position is float32 (x, y, z) and orientation_rpy is
+        # float32 (roll, pitch, yaw) in radians. success=False means
+        # the Gazebo lookup failed; fall back to zeros for this step.
+        cube_pose_done, cube_pos, cube_ori = self.get_model_pose()
+        if cube_pose_done:
+            self.cube_pos = cube_pos.astype(np.float32, copy=False)
+            self.cube_ori = cube_ori.astype(np.float32, copy=False)
 
         # if the cube pose is not found, we can set the current cube pos to 0
         # we need to set this to 0 so that we can get the observations
@@ -1066,12 +1057,12 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         self.cube_marker.publish()
 
         # --- 1. Get EE position
-        ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        ee = self.fk_pykdl(self.joint_pos_all)
+        if ee is None:
+            ee = self.ee_pos
+        self.ee_pos = np.asarray(ee, dtype=np.float32)
 
         # --- 2. Get EE orientation
-        self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # we need this for IK
         ee_ori_rpy = self.quaternion_to_euler(self.ee_ori)
 
         # --- Linear distance to the goal
@@ -1086,7 +1077,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         # --- Get Current Joint values - only for the joints we are using
         #  we need this for delta actions
         # self.joint_values = self.current_joint_positions.copy()  # Get a float list
-        self.joint_values = self.get_joint_angles()  # Get a float list
+        self.joint_values = list(self.joint_pos_all)  # Get a float list
         # we don't need to convert this to numpy array since we concat using numpy below
 
         # --- 6. Get the previous action
@@ -1478,15 +1469,32 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
 
         return random_goal
 
-    def get_random_cube_init_pose(self):
+    def get_random_cube_init_pose(self, max_tries: int = 100):
         """
-        Function to get a random cube pose for the initial position without checking
+        Function to get a random cube pose for the initial position.
 
-        return: random_cube_pose
+        Samples from the goal-sampling box but rejects samples within
+        ``reach_tolerance`` of the current ``pnp_goal`` so an episode
+        can't start already-succeeded when goal and cube spawn happen
+        to overlap. After ``max_tries`` rejections falls back to a
+        y-offset nudge guaranteed to land outside the success radius.
         """
         random_cube_pose = self._sample_box(self.goal_space)
         random_cube_pose[2] = 0.015
 
+        goal = getattr(self, "pnp_goal", None)
+        if goal is None:
+            return random_cube_pose
+
+        goal_arr = np.asarray(goal, dtype=np.float32)
+        for _ in range(max_tries):
+            if np.linalg.norm(random_cube_pose - goal_arr) > self.reach_tolerance:
+                return random_cube_pose
+            random_cube_pose = self._sample_box(self.goal_space)
+            random_cube_pose[2] = 0.015
+
+        nudge = float(self.reach_tolerance) + 0.02
+        random_cube_pose[1] = goal_arr[1] + nudge
         return random_cube_pose
 
     # not used

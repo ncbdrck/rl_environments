@@ -918,12 +918,12 @@ class RX200PushEnv(rx200_robot_sim_zed2.RX200RobotEnv):
         self.cube_marker.publish()
 
         # --- 1. Get EE position
-        ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        ee = self.fk_pykdl(self.joint_pos_all)
+        if ee is None:
+            ee = self.ee_pos
+        self.ee_pos = np.asarray(ee, dtype=np.float32)
 
         # --- 2. Get EE orientation
-        self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # we need this for IK
         ee_ori_rpy = self.quaternion_to_euler(self.ee_ori)
 
         # --- Linear distance to the goal
@@ -938,7 +938,7 @@ class RX200PushEnv(rx200_robot_sim_zed2.RX200RobotEnv):
         # --- Get Current Joint values - only for the joints we are using
         #  we need this for delta actions
         # self.joint_values = self.current_joint_positions.copy()  # Get a float list
-        self.joint_values = self.get_joint_angles()  # Get a float list
+        self.joint_values = list(self.joint_pos_all)  # Get a float list
         # we don't need to convert this to numpy array since we concat using numpy below
 
         # --- 6. Get the previous action

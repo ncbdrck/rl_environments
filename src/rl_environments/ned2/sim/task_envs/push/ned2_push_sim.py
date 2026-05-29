@@ -913,12 +913,12 @@ class NED2PushEnv(ned2_robot_sim.NED2RobotEnv):
         self.cube_marker.publish()
 
         # --- 1. Get EE position
-        ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        ee = self.fk_pykdl(self.joint_pos_all)
+        if ee is None:
+            ee = self.ee_pos
+        self.ee_pos = np.asarray(ee, dtype=np.float32)
 
         # --- 2. Get EE orientation
-        self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # we need this for IK
         ee_ori_rpy = self.quaternion_to_euler(self.ee_ori)
 
         # --- Linear distance to the goal
@@ -933,7 +933,7 @@ class NED2PushEnv(ned2_robot_sim.NED2RobotEnv):
         # --- Get Current Joint values - only for the joints we are using
         #  we need this for delta actions
         # self.joint_values = self.current_joint_positions.copy()  # Get a float list
-        self.joint_values = self.get_joint_angles()  # Get a float list
+        self.joint_values = list(self.joint_pos_all)  # Get a float list
         # we don't need to convert this to numpy array since we concat using numpy below
 
         # --- 6. Get the previous action
@@ -1219,15 +1219,35 @@ class NED2PushEnv(ned2_robot_sim.NED2RobotEnv):
 
         return random_goal
 
-    def get_random_cube_init_pose(self):
+    def get_random_cube_init_pose(self, max_tries: int = 100):
         """
-        Function to get a random cube pose for the initial position without checking
+        Function to get a random cube pose for the initial position.
 
-        return: random_cube_pose
+        Samples from the goal-sampling box (configurable via
+        ``position_goal_min/max``) but rejects samples that land within
+        ``reach_tolerance`` of the current ``push_goal``, so an episode
+        can't start already-succeeded when goal and cube spawn happen
+        to overlap. After ``max_tries`` rejections falls back to the
+        last sample with the y offset flipped — guaranteed off-goal
+        unless the goal is exactly at y=0 and the cube spawn happens to
+        match in xz, which is vanishingly unlikely with float32 RNG.
         """
         random_cube_pose = self._sample_box(self.goal_space)
         random_cube_pose[2] = 0.015
 
+        goal = getattr(self, "push_goal", None)
+        if goal is None:
+            return random_cube_pose
+
+        goal_arr = np.asarray(goal, dtype=np.float32)
+        for _ in range(max_tries):
+            if np.linalg.norm(random_cube_pose - goal_arr) > self.reach_tolerance:
+                return random_cube_pose
+            random_cube_pose = self._sample_box(self.goal_space)
+            random_cube_pose[2] = 0.015
+
+        nudge = float(self.reach_tolerance) + 0.02
+        random_cube_pose[1] = goal_arr[1] + nudge
         return random_cube_pose
 
     # not used

@@ -39,6 +39,8 @@ class RX200ReacherEnv(rx200_robot_real.RX200RobotEnv):
         * roscore_port: Port of the roscore to be launched. If None, a random port is chosen.
         * seed: Seed for the random number generator.
         * close_env_prompt: Whether to prompt the user to close the env or not.
+        * reset_env_prompt: Whether to prompt the operator before each reset (defaults to True because reset homes the arm via MoveIt on real hardware).
+        * reset_controllers_prompt: Whether to prompt before re-spawning controllers on reset (defaults to False because this env does not respawn controllers on reset).
         * reward_type: Type of reward to be used. It Can be "Sparse" or "Dense".
         * delta_action: Whether to use the delta actions or the absolute actions.
         * delta_coeff: Coefficient to be used for the delta actions.
@@ -60,7 +62,8 @@ class RX200ReacherEnv(rx200_robot_real.RX200RobotEnv):
     """
 
     def __init__(self, new_roscore: bool = False, roscore_port: str = None, seed: int = None,
-                 close_env_prompt: bool = True, reward_type: str = "Dense",
+                 close_env_prompt: bool = True, reset_env_prompt: bool = True,
+                 reset_controllers_prompt: bool = False, reward_type: str = "Dense",
                  delta_action: bool = True, delta_coeff: float = 0.05,
                  environment_loop_rate: float = 10.0, action_cycle_time: float = 0.0,
                  use_smoothing: bool = False, default_port=True, ee_action_type: bool = False,
@@ -266,6 +269,8 @@ class RX200ReacherEnv(rx200_robot_real.RX200RobotEnv):
                                                  lifetime=30.0)
 
         super().__init__(ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt,
+                         reset_env_prompt=reset_env_prompt,
+                         reset_controllers_prompt=reset_controllers_prompt,
                          action_cycle_time=action_cycle_time, use_kinect=use_kinect, use_zed2=use_zed2)
 
         # for smoothing
@@ -766,10 +771,10 @@ class RX200ReacherEnv(rx200_robot_real.RX200RobotEnv):
         current_goal = self.reach_goal
 
         # --- 1. Get EE position
-        ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
-        self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])
+        ee = self.fk_pykdl(self.joint_pos_all)
+        if ee is None:
+            ee = self.ee_pos
+        self.ee_pos = np.asarray(ee, dtype=np.float32)
 
         # --- Linear distance to the goal
         linear_dist_ee_goal = current_goal - self.ee_pos  # goal is box dtype and ee_pos is numpy.array. It is okay
@@ -783,7 +788,7 @@ class RX200ReacherEnv(rx200_robot_real.RX200RobotEnv):
         # --- Get Current Joint values - only for the joints we are using
         #  we need this for delta actions
         # self.joint_values = self.current_joint_positions.copy()  # Get a float list
-        self.joint_values = self.get_joint_angles()  # Get a float list
+        self.joint_values = list(self.joint_pos_all)  # Get a float list
         # we don't need to convert this to numpy array since we concat using numpy below
 
         if self.prev_action is None:

@@ -48,6 +48,8 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         * roscore_port: Port of the roscore to be launched. If None, a random port is chosen.
         * default_port: Whether to launch a new roscore on the default port (11311).
         * close_env_prompt: Whether to prompt the user to confirm on env close (real-robot safety).
+        * reset_env_prompt: Whether to prompt the operator before each reset (defaults to True because reset homes the arm via MoveIt on real hardware).
+        * reset_controllers_prompt: Whether to prompt before re-spawning controllers on reset (defaults to False because this env does not respawn controllers on reset).
         * seed: Seed for the random number generator.
         * reward_type: Type of reward to be used. It Can be "Sparse" or "Dense".
         * delta_action: Whether to use the delta actions or the absolute actions.
@@ -78,12 +80,13 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
             project the cube pose (passed as the ``target_frame`` arg to the launch file).
         * remote_ip: IP address of the remote machine where the ROS master is running.
         * local_ip: IP address of the local machine where the ROS node is running.
-        * multi_device_mode: Whether to use multi-device mode or not.
+        * multi_device_mode: When True (and remote_ip + local_ip + roscore_port are set) the env attaches to a roscore already running on the remote (e.g. the Niryo Raspberry Pi master). Defaults to False, so by default the env launches its own roscore on the local machine via default_port/new_roscore — set this True when running the published Pi multi-device topology.
 
     """
 
     def __init__(self, new_roscore: bool = False, roscore_port: str = None,
                  default_port: bool = True, close_env_prompt: bool = True,
+                 reset_env_prompt: bool = True, reset_controllers_prompt: bool = False,
                  seed: int = None, reward_type: str = "Dense",
                  delta_action: bool = True, delta_coeff: float = 0.05, ee_action_type: bool = False,
                  environment_loop_rate: float = 25, action_cycle_time: float = 0.100,
@@ -357,6 +360,8 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         # ned2_reach_real here so the head-mounted kinect2 / ZED2 stream
         # toggles the same way.
         super().__init__(ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt,
+                         reset_env_prompt=reset_env_prompt,
+                         reset_controllers_prompt=reset_controllers_prompt,
                          action_cycle_time=action_cycle_time, use_kinect=use_kinect, use_zed2=use_zed2, use_wrist_camera=use_wrist_camera,
                          remote_ip=remote_ip, local_ip=local_ip, multi_device_mode=multi_device_mode)
 
@@ -376,8 +381,8 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         if auto_launch_cube_tracker:
             if cube_tracker_camera not in ("kinect2", "zed2", "d405"):
                 raise ValueError(
-                    f"cube_tracker_camera must be 'kinect2' or 'zed2', "
-                    f"got {cube_tracker_camera!r}. Must be 'kinect2', 'zed2', or 'd405'."
+                    f"cube_tracker_camera must be one of 'kinect2', 'zed2' "
+                    f"or 'd405'; got {cube_tracker_camera!r}."
                 )
             _tracker_args = []
             if cube_pose_topic != "/cube_pose":
@@ -1009,12 +1014,12 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         self.cube_marker.publish()
 
         # --- 1. Get EE position
-        ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        ee = self.fk_pykdl(self.joint_pos_all)
+        if ee is None:
+            ee = self.ee_pos
+        self.ee_pos = np.asarray(ee, dtype=np.float32)
 
         # --- 2. Get EE orientation
-        self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # we need this for IK
         ee_ori_rpy = self.quaternion_to_euler(self.ee_ori)
 
         # --- Linear distance to the goal
@@ -1029,7 +1034,7 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         # --- Get Current Joint values - only for the joints we are using
         #  we need this for delta actions
         # self.joint_values = self.current_joint_positions.copy()  # Get a float list
-        self.joint_values = self.get_joint_angles()  # Get a float list
+        self.joint_values = list(self.joint_pos_all)  # Get a float list
         # we don't need to convert this to numpy array since we concat using numpy below
 
         # --- 6. Get the previous action

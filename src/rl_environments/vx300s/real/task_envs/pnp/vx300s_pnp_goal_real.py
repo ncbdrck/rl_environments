@@ -46,6 +46,8 @@ class VX300SPnPGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         * roscore_port: Port of the roscore to be launched. If None, a random port is chosen.
         * default_port: Whether to launch a new roscore on the default port (11311).
         * close_env_prompt: Whether to prompt the user to confirm on env close (real-robot safety).
+        * reset_env_prompt: Whether to prompt the operator before each reset (defaults to True because reset homes the arm via MoveIt and closes the gripper on real hardware).
+        * reset_controllers_prompt: Whether to prompt before re-spawning controllers on reset (defaults to False because this env does not respawn controllers on reset).
         * seed: Seed for the random number generator.
         * reward_type: Type of reward to be used. It Can be "Sparse" or "Dense".
         * delta_action: Whether to use the delta actions or the absolute actions.
@@ -72,6 +74,7 @@ class VX300SPnPGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
 
     def __init__(self, new_roscore: bool = False, roscore_port: str = None,
                  default_port: bool = True, close_env_prompt: bool = True,
+                 reset_env_prompt: bool = True, reset_controllers_prompt: bool = False,
                  seed: int = None, reward_type: str = "Dense",
                  delta_action: bool = True, delta_coeff: float = 0.05, ee_action_type: bool = False,
                  environment_loop_rate: float = 10, action_cycle_time: float = 0.100,
@@ -398,6 +401,8 @@ class VX300SPnPGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
                                                  lifetime=30.0)
 
         super().__init__(ros_port=ros_port, seed=seed, close_env_prompt=close_env_prompt,
+                         reset_env_prompt=reset_env_prompt,
+                         reset_controllers_prompt=reset_controllers_prompt,
                          action_cycle_time=action_cycle_time, use_kinect=use_kinect, use_zed2=use_zed2)
 
         # --- External cube-pose pipeline. See push std env for full notes.
@@ -514,10 +519,17 @@ class VX300SPnPGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         # --------------- Initial robot pose - Home
         self.init_pos = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
 
-        # close the gripper
-        self.init_close_gripper = np.array([0.025, -0.025], dtype=np.float32)
-        # open the gripper (not used)
-        self.init_open_gripper = np.array([0.055, -0.055], dtype=np.float32)
+        # Episode-init gripper poses, expressed as left/right finger
+        # pair positions in metres. The scalar gripper action (action[-1])
+        # is published as (left, right) = (gripper_cmd, -gripper_cmd) and
+        # clipped to [gripper_min, gripper_max], so the init poses below
+        # mirror those bounds: closed = gripper_min, open = gripper_max.
+        # Keeping them in sync with the action bounds means the reset
+        # state is always reachable through the action interface (and
+        # the agent's open command actually reaches full open instead
+        # of being silently clipped to a tighter value).
+        self.init_close_gripper = np.array([self.gripper_min, -self.gripper_min], dtype=np.float32)
+        self.init_open_gripper = np.array([self.gripper_max, -self.gripper_max], dtype=np.float32)
 
         # Reset cube-velocity finite-diff state so the new episode doesn't
         # inherit the previous one's tail-end pose as its baseline.
@@ -1036,12 +1048,12 @@ class VX300SPnPGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         self.cube_marker.publish()
 
         # --- 1. Get EE position
-        ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        ee = self.fk_pykdl(self.joint_pos_all)
+        if ee is None:
+            ee = self.ee_pos
+        self.ee_pos = np.asarray(ee, dtype=np.float32)
 
         # --- 2. Get EE orientation
-        self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
-                                ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # we need this for IK
         ee_ori_rpy = self.quaternion_to_euler(self.ee_ori)
 
         # --- Linear distance to the goal
@@ -1056,7 +1068,7 @@ class VX300SPnPGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         # --- Get Current Joint values - only for the joints we are using
         #  we need this for delta actions
         # self.joint_values = self.current_joint_positions.copy()  # Get a float list
-        self.joint_values = self.get_joint_angles()  # Get a float list
+        self.joint_values = list(self.joint_pos_all)  # Get a float list
         # we don't need to convert this to numpy array since we concat using numpy below
 
         # --- 6. Get the previous action

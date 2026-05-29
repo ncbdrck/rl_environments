@@ -583,18 +583,22 @@ class NED2RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         if joint_state is not None:
             self.joint_state = joint_state
 
-            # joint names - not using this
+            # joint names — used below to pull positions/velocities by
+            # name rather than trusting the driver's publish order.
             self.joint_state_names = list(joint_state.name)
 
-            # get the current joint positions - using this
-            joint_pos_all = list(joint_state.position)
-            self.joint_pos_all = joint_pos_all
+            # Build the obs-facing joint vectors by NAME lookup so a
+            # driver change that re-orders /joint_states (or adds an
+            # extra finger / mimic joint) doesn't silently scramble the
+            # observation. The expected joint set is arm + (gripper
+            # when the gripper URDF is loaded).
+            wanted = list(self.arm_joint_names) + list(self.gripper_joint_names)
+            name_to_idx = {n: i for i, n in enumerate(joint_state.name)}
+            indices = [name_to_idx[n] for n in wanted if n in name_to_idx]
 
-            # get the current joint velocities - we are using this
-            self.current_joint_velocities = list(joint_state.velocity)
-
-            # get the current joint efforts - not using this
-            self.current_joint_efforts = list(joint_state.effort)
+            self.joint_pos_all = [joint_state.position[i] for i in indices]
+            self.current_joint_velocities = [joint_state.velocity[i] for i in indices]
+            self.current_joint_efforts = [joint_state.effort[i] for i in indices]
 
     def move_arm_joints(self, q_positions: np.ndarray, time_from_start: float = 0.5) -> bool:
         """
