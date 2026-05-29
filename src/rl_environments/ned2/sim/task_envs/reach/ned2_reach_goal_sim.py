@@ -425,7 +425,8 @@ class NED2ReacherGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
 
         # get initial ee pos and joint values (we need this for delta actions or when we have EE action space)
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z],
+                               dtype=np.float32)
         self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
                                 ee_pos_tmp.pose.orientation.z,
                                 ee_pos_tmp.pose.orientation.w])  # for IK calculation - EE actions
@@ -867,7 +868,8 @@ class NED2ReacherGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
 
         # --- 1. Get EE position
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z],
+                               dtype=np.float32)
         self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
                                 ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])
 
@@ -902,9 +904,13 @@ class NED2ReacherGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
             while not done:
                 done = self._check_joint_states_ready()
 
-        # our observations
+        # our observations. dtype=np.float32 matches the env's
+        # observation_space (Box(..., dtype=np.float32)); without it
+        # numpy promotes to float64 and Gymnasium's PassiveEnvChecker
+        # warns, and SB3 silently casts every step in the HER buffer.
         obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
-                              prev_action, self.current_joint_velocities), axis=None)
+                              prev_action, self.current_joint_velocities), axis=None,
+                             dtype=np.float32)
 
         if self.log_internal_state:
             rospy.loginfo(f"Observations --->: {obs}")

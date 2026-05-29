@@ -32,8 +32,8 @@ from pykdl_utils.kdl_kinematics import KDLKinematics
 from tf.transformations import euler_from_matrix
 
 register(
-    id='NED2RobotGoalEnv-v0',
-    entry_point='rl_environments.ned1.sim.robot_envs.ned2_robot_goal_sim:NED2RobotGoalEnv',
+    id='NED2RobotGoalBaseSimEnv-v0',
+    entry_point='rl_environments.ned2.sim.robot_envs.ned2_robot_goal_sim:NED2RobotGoalEnv',
     max_episode_steps=1000,
 )
 

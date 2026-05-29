@@ -24,7 +24,6 @@ from realros.utils import ros_kinematics
 
 from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
-from tf.transformations import euler_from_matrix
 
 register(
     id='RX200RobotBaseEnv-v0',

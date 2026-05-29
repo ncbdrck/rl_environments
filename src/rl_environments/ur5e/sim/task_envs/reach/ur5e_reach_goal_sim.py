@@ -5,7 +5,6 @@ from typing import Any, Optional, Dict
 import rospy
 import numpy as np
 from gymnasium import spaces
-from gymnasium.envs.registration import register
 import scipy.spatial
 
 # Custom robot env
@@ -20,12 +19,8 @@ from multiros.utils import ros_common
 # from multiros.utils import ros_controllers
 from multiros.utils import ros_markers
 
-# Register your environment using the OpenAI register method to utilize gym.make("MyTaskGoalEnv-v0").
-register(
-    id='UR5eReacherGoalSim-v0',
-    entry_point='rl_environments.ur5e.sim.task_envs.reach.ur5e_reach_goal_sim:UR5eReacherGoalEnv',
-    max_episode_steps=1000,
-)
+# Canonical env-id registration lives in rl_environments/__init__.py;
+# this module just defines the env class.
 
 
 class UR5eReacherGoalEnv(ur5e_robot_goal_sim.UR5eRobotGoalEnv):

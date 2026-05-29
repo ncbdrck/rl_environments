@@ -64,11 +64,11 @@ class RX200ReacherGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
     def __init__(self, new_roscore: bool = False, roscore_port: str = None, seed: int = None,
                  close_env_prompt: bool = True, reward_type: str = "sparse",
                  delta_action: bool = True, delta_coeff: float = 0.05,
-                 environment_loop_rate: float = None, action_cycle_time: float = 0.0,
+                 environment_loop_rate: float = 10.0, action_cycle_time: float = 0.0,
                  use_smoothing: bool = False, default_port=True, ee_action_type: bool = False,
                  rgb_obs_only: bool = False, normal_obs_only: bool = True, rgb_plus_normal_obs: bool = False,
                  rgb_plus_depth_plus_normal_obs: bool = False, debug: bool = False, action_speed: float = 0.5,
-                 simple_dense_reward: bool = False, log_internal_state: bool = False, use_kinect: bool = False,
+                 simple_dense_reward: bool = True, log_internal_state: bool = False, use_kinect: bool = False,
                  use_zed2: bool = False):
 
         """
@@ -409,7 +409,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
 
         # get initial ee pos and joint values (we need this for delta actions or when we have EE action space)
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z],
+                               dtype=np.float32)
         self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
                                 ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # for IK calculation - EE actions
         self.joint_values = self.get_joint_angles()
@@ -885,7 +886,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
 
         # --- 1. Get EE position
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z],
+                               dtype=np.float32)
         self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
                                 ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])
 
@@ -920,9 +922,13 @@ class RX200ReacherGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
             while not done:
                 done = self._check_joint_states_ready()
 
-        # our observations
+        # our observations. dtype=np.float32 matches the env's
+        # observation_space (Box(..., dtype=np.float32)); without it
+        # numpy promotes to float64 and Gymnasium's PassiveEnvChecker
+        # warns, and SB3 silently casts every step in the HER buffer.
         obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
-                              prev_action, self.current_joint_velocities), axis=None)
+                              prev_action, self.current_joint_velocities), axis=None,
+                             dtype=np.float32)
 
         if self.log_internal_state:
             rospy.loginfo(f"Observations --->: {obs}")

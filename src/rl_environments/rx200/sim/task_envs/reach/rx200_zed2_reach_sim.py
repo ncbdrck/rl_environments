@@ -5,7 +5,6 @@ from typing import Any, Optional, Dict
 import rospy
 import numpy as np
 from gymnasium import spaces
-from gymnasium.envs.registration import register
 import scipy.spatial
 
 # Custom robot env
@@ -20,12 +19,8 @@ from multiros.utils import ros_common
 from multiros.utils import ros_controllers
 from multiros.utils import ros_markers
 
-# Register your environment using the gymnasium register method to utilize gym.make("TaskEnv-v0").
-register(
-    id='RX200Zed2ReacherSim-v0',
-    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_zed2_reach_sim:RX200ReacherEnv',
-    max_episode_steps=1000,
-)
+# Canonical env-id registration lives in rl_environments/__init__.py;
+# this module just defines the env class.
 
 
 class RX200ReacherEnv(rx200_robot_sim_zed2.RX200RobotEnv):

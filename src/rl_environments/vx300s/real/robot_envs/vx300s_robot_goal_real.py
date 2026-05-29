@@ -26,7 +26,7 @@ from pykdl_utils.kdl_kinematics import KDLKinematics
 from tf.transformations import euler_from_matrix
 
 register(
-    id='VX300SRobotGoalEnv-v0',
+    id='VX300SRobotGoalBaseRealEnv-v0',
     entry_point='rl_environments.vx300s.real.robot_envs.vx300s_robot_goal_real:VX300SRobotGoalEnv',
     max_episode_steps=1000,
 )

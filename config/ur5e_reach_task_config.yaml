@@ -163,7 +163,10 @@ ur5e: # namespace
     gazebo_update_rate_multiplier: 1.0
 
     # ******** Goal tolerance
-    reach_tolerance: 0.05
+    # Canonical reach radius for the framework's reach task; the other
+    # three robots' configs use the same value so cross-robot success
+    # rates are measured against the same criterion.
+    reach_tolerance: 0.02
 
     # ******** Reward shaping
     step_reward: -0.5

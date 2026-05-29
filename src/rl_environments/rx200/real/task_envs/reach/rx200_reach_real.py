@@ -62,11 +62,11 @@ class RX200ReacherEnv(rx200_robot_real.RX200RobotEnv):
     def __init__(self, new_roscore: bool = False, roscore_port: str = None, seed: int = None,
                  close_env_prompt: bool = True, reward_type: str = "Dense",
                  delta_action: bool = True, delta_coeff: float = 0.05,
-                 environment_loop_rate: float = None, action_cycle_time: float = 0.0,
+                 environment_loop_rate: float = 10.0, action_cycle_time: float = 0.0,
                  use_smoothing: bool = False, default_port=True, ee_action_type: bool = False,
                  rgb_obs_only: bool = False, normal_obs_only: bool = True, rgb_plus_normal_obs: bool = False,
                  rgb_plus_depth_plus_normal_obs: bool = False, debug: bool = False, action_speed: float = 0.5,
-                 simple_dense_reward: bool = False, log_internal_state: bool = False, use_kinect: bool = False,
+                 simple_dense_reward: bool = True, log_internal_state: bool = False, use_kinect: bool = False,
                  use_zed2: bool = False):
 
         """

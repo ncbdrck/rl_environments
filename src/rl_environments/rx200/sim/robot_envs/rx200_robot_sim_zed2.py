@@ -27,7 +27,7 @@ from multiros.utils import ros_kinematics
 
 from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
-from tf.transformations import euler_from_matrix, euler_from_quaternion
+from tf.transformations import euler_from_quaternion
 
 register(
     id='RX200RobotEnv_zed2-v0',

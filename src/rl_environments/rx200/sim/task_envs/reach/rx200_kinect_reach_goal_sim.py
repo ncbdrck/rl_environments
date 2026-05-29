@@ -5,7 +5,6 @@ from typing import Any, Optional, Dict
 import rospy
 import numpy as np
 from gymnasium import spaces
-from gymnasium.envs.registration import register
 import scipy.spatial
 
 # Custom robot env
@@ -20,12 +19,8 @@ from multiros.utils import ros_common
 # from multiros.utils import ros_controllers
 from multiros.utils import ros_markers
 
-# Register your environment using the OpenAI register method to utilize gym.make("MyTaskGoalEnv-v0").
-register(
-    id='RX200ReacherGoalSim-v0',
-    entry_point='rl_environments.rx200.sim.task_envs.reach.rx200_kinect_reach_goal_sim:RX200ReacherGoalEnv',
-    max_episode_steps=1000,
-)
+# Canonical env-id registration lives in rl_environments/__init__.py;
+# this module just defines the env class.
 
 
 class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
@@ -432,7 +427,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
 
         # get initial ee pos and joint values (we need this for delta actions or when we have EE action space)
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z],
+                               dtype=np.float32)
         self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
                                 ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])  # for IK calculation - EE actions
         self.joint_values = self.get_joint_angles()
@@ -899,7 +895,8 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
 
         # --- 1. Get EE position
         ee_pos_tmp = self.get_ee_pose()  # Get a geometry_msgs/PoseStamped msg
-        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z])
+        self.ee_pos = np.array([ee_pos_tmp.pose.position.x, ee_pos_tmp.pose.position.y, ee_pos_tmp.pose.position.z],
+                               dtype=np.float32)
         self.ee_ori = np.array([ee_pos_tmp.pose.orientation.x, ee_pos_tmp.pose.orientation.y,
                                 ee_pos_tmp.pose.orientation.z, ee_pos_tmp.pose.orientation.w])
 
@@ -934,9 +931,13 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
             while not done:
                 done = self._check_joint_states_ready()
 
-        # our observations
+        # our observations. dtype=np.float32 matches the env's
+        # observation_space (Box(..., dtype=np.float32)); without it
+        # numpy promotes to float64 and Gymnasium's PassiveEnvChecker
+        # warns, and SB3 silently casts every step in the HER buffer.
         obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
-                              prev_action, self.current_joint_velocities), axis=None)
+                              prev_action, self.current_joint_velocities), axis=None,
+                             dtype=np.float32)
 
         if self.log_internal_state:
             rospy.loginfo(f"Observations --->: {obs}")

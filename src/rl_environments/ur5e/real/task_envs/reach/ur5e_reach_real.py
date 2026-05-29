@@ -66,7 +66,7 @@ class UR5eReacherEnv(ur5e_robot_real.UR5eRobotEnv):
                  use_smoothing: bool = False, default_port=True, ee_action_type: bool = False,
                  rgb_obs_only: bool = False, normal_obs_only: bool = True, rgb_plus_normal_obs: bool = False,
                  rgb_plus_depth_plus_normal_obs: bool = False, debug: bool = False, action_speed: float = 0.5,
-                 simple_dense_reward: bool = False, log_internal_state: bool = False, use_kinect: bool = False,
+                 simple_dense_reward: bool = True, log_internal_state: bool = False, use_kinect: bool = False,
                  use_zed2: bool = False):
 
         """
