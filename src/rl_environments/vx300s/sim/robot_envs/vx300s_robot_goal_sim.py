@@ -33,7 +33,7 @@ from multiros.utils import ros_kinematics
 
 from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
-from tf.transformations import euler_from_matrix
+from tf.transformations import euler_from_matrix, euler_from_quaternion
 
 register(
     id='VX300SRobotGoalEnv-v0',
@@ -355,28 +355,52 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
     # ---------------------------------------------------
     #   Custom methods for the VX300S Robot Environment
 
-    def get_model_pose(self, model_name="red_cube"):
+    def get_model_pose(self, model_name="red_cube", rpy=True):
         """
-        Get the pose of an object in Gazebo
+        Get the pose of an object in Gazebo.
 
         Args:
-            model_name: name of the object whose pose is to be retrieved
+            model_name: name of the object whose pose is to be retrieved.
+            rpy: True (default) returns the orientation as Euler angles
+                (roll, pitch, yaw) in radians; False returns the quaternion
+                (x, y, z, w).
 
         Returns:
-            pose: pose of the object as a geometry_msgs/PoseStamped message
+            success: True if Gazebo's GetModelState call succeeded.
+            position: numpy float32 array (x, y, z) in metres, relative to
+                ``vx300s/base_link``.
+            orientation: numpy float32 array — (rpy) if ``rpy=True``, else
+                (x, y, z, w) quaternion. On failure both arrays are zeros.
         """
 
         if not self.real_time:
             gazebo_core.unpause_gazebo()
 
-        header, pose, twist, success = gazebo_models.gazebo_get_model_state(model_name=model_name,
-                                                                            relative_entity_name="vx300s/base_link")
+        # pose is a geometry_msgs/Pose message
+        header, pose, twist, success = gazebo_models.gazebo_get_model_state(
+            model_name=model_name, relative_entity_name="vx300s/base_link")
 
         if not self.real_time:
             gazebo_core.pause_gazebo()
 
-        # pose contains the position and orientation of the object
-        return pose
+        if success:
+            if rpy:
+                orientation = np.array(euler_from_quaternion(
+                    [pose.orientation.x, pose.orientation.y,
+                     pose.orientation.z, pose.orientation.w]),
+                    dtype=np.float32)
+            else:
+                orientation = np.array([pose.orientation.x, pose.orientation.y,
+                                        pose.orientation.z, pose.orientation.w],
+                                       dtype=np.float32)
+            position = np.array([pose.position.x, pose.position.y,
+                                 pose.position.z], dtype=np.float32)
+            return success, position, orientation
+
+        # Failed lookup — return zeros so callers can detect via the flag.
+        zeros3 = np.zeros(3, dtype=np.float32)
+        zeros_ori = np.zeros(3 if rpy else 4, dtype=np.float32)
+        return success, zeros3, zeros_ori
 
     def spawn_cube_in_gazebo(self, model_pos_x, model_pos_y):
         """

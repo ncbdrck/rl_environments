@@ -997,22 +997,15 @@ class UR5ePnPGoalEnv(ur5e_robot_goal_sim.UR5eRobotGoalEnv):
         else:
             current_goal = self.pnp_goal
 
-        # --- Get the current cube position and orientation
-        # GoalEnv variant of the robot env returns a single
-        # geometry_msgs/Pose (not the 3-tuple the standard robot env
-        # gives). Adapt it inline here: pose=None means lookup failed.
-        cube_pose_msg = self.get_model_pose()
-        if cube_pose_msg is None:
-            cube_pose_done = False
-        else:
-            cube_pose_done = True
-            self.cube_pos = np.array([cube_pose_msg.position.x,
-                                      cube_pose_msg.position.y,
-                                      cube_pose_msg.position.z], dtype=np.float32)
-            self.cube_ori = np.array(tf.transformations.euler_from_quaternion([
-                cube_pose_msg.orientation.x, cube_pose_msg.orientation.y,
-                cube_pose_msg.orientation.z, cube_pose_msg.orientation.w]),
-                dtype=np.float32)
+        # --- Get the current cube position and orientation.
+        # get_model_pose returns (success, position, orientation_rpy) where
+        # position is a float32 (x, y, z) array and orientation_rpy is a
+        # float32 (roll, pitch, yaw) array in radians. success=False means
+        # the Gazebo lookup failed; fall back to zeros for this step.
+        cube_pose_done, cube_pos, cube_ori = self.get_model_pose()
+        if cube_pose_done:
+            self.cube_pos = cube_pos.astype(np.float32, copy=False)
+            self.cube_ori = cube_ori.astype(np.float32, copy=False)
 
         # if the cube pose is not found, we can set the current cube pos to 0
         # we need to set this to 0 so that we can get the observations
@@ -1410,11 +1403,14 @@ class UR5ePnPGoalEnv(ur5e_robot_goal_sim.UR5eRobotGoalEnv):
     # not used
     def get_random_goal(self, max_tries: int = 100):
         """
-        Function to get a reachable goal
+        Function to get a reachable goal.
+
+        Samples from ``goal_space`` (configured with the lift-and-place
+        z range in the task YAML) and keeps the sampled height so the
+        agent learns to place above the cafe-table.
         """
         for i in range(max_tries):
             goal = self._sample_box(self.goal_space)
-            goal[2] = 0.015  # since the robot is mounted on a table
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1426,10 +1422,12 @@ class UR5ePnPGoalEnv(ur5e_robot_goal_sim.UR5eRobotGoalEnv):
 
     def get_random_goal_no_check(self):
         """
-        Function to get a random goal without checking
+        Function to get a random goal without checking.
+
+        z is sampled from ``goal_space`` (place-at-height range from the
+        YAML); the agent must lift the cube off the table to reach it.
         """
         random_goal = self._sample_box(self.goal_space)
-        random_goal[2] = 0.015
 
         return random_goal
 
@@ -1440,7 +1438,9 @@ class UR5ePnPGoalEnv(ur5e_robot_goal_sim.UR5eRobotGoalEnv):
         return: random_cube_pose
         """
         random_cube_pose = self._sample_box(self.goal_space)
-        random_cube_pose[2] = 0.015
+        # Cube spawns on top of the cafe-table for the raised-base UR5e
+        # mounting (table_top_z ~= 0.775, cube half-height ~= 0.020).
+        random_cube_pose[2] = 0.795
 
         return random_cube_pose
 

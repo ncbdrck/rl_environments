@@ -1220,7 +1220,10 @@ class UR5ePushEnv(ur5e_robot_sim.UR5eRobotEnv):
         """
         for i in range(max_tries):
             goal = self._sample_box(self.goal_space)
-            goal[2] = 0.015  # since the robot is mounted on a table
+            # Push slides the cube along the cafe-table surface; keep
+            # goal height at the cube spawn height for the raised-base
+            # UR5e (table_top_z ~= 0.775, cube half-height ~= 0.020).
+            goal[2] = 0.795
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1235,7 +1238,8 @@ class UR5ePushEnv(ur5e_robot_sim.UR5eRobotEnv):
         Function to get a random goal without checking
         """
         random_goal = self._sample_box(self.goal_space)
-        random_goal[2] = 0.015
+        # Push goal stays at cube/table height; see get_random_goal above.
+        random_goal[2] = 0.795
 
         return random_goal
 
@@ -1246,7 +1250,8 @@ class UR5ePushEnv(ur5e_robot_sim.UR5eRobotEnv):
         return: random_cube_pose
         """
         random_cube_pose = self._sample_box(self.goal_space)
-        random_cube_pose[2] = 0.015
+        # Cube spawns on top of the cafe-table; see get_random_goal above.
+        random_cube_pose[2] = 0.795
 
         return random_cube_pose
 

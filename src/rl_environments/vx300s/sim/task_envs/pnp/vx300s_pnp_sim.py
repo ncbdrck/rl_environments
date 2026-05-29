@@ -1334,11 +1334,14 @@ class VX300SPnPEnv(vx300s_robot_sim.VX300SRobotEnv):
     # not used
     def get_random_goal(self, max_tries: int = 100):
         """
-        Function to get a reachable goal
+        Function to get a reachable goal.
+
+        z is sampled from ``goal_space`` (configured with the
+        lift-and-place range in the task YAML) so the agent learns to
+        place the cube above the table.
         """
         for i in range(max_tries):
             goal = self._sample_box(self.goal_space)
-            goal[2] = 0.015  # since the robot is mounted on a table
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1350,10 +1353,11 @@ class VX300SPnPEnv(vx300s_robot_sim.VX300SRobotEnv):
 
     def get_random_goal_no_check(self):
         """
-        Function to get a random goal without checking
+        Function to get a random goal without checking.
+
+        z stays in the lift-and-place range from ``goal_space``.
         """
         random_goal = self._sample_box(self.goal_space)
-        random_goal[2] = 0.015
 
         return random_goal
 
@@ -1364,6 +1368,8 @@ class VX300SPnPEnv(vx300s_robot_sim.VX300SRobotEnv):
         return: random_cube_pose
         """
         random_cube_pose = self._sample_box(self.goal_space)
+        # Cube spawns flush on the cafe-table for the table-mounted
+        # VX300S (z origin at the table surface; cube half-height = 0.015).
         random_cube_pose[2] = 0.015
 
         return random_cube_pose

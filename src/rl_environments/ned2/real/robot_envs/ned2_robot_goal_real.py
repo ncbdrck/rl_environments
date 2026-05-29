@@ -152,8 +152,15 @@ class NED2RobotGoalEnv(RealGoalEnv.RealGoalEnv):
                                                                JointTrajectory,
                                                                queue_size=10)
 
-        # parameters for calculating FK
-        self.ee_link = "wrist_link"
+        # parameters for calculating FK, IK
+        # tool_link, not wrist_link: the action vector has 6 joint values
+        # (NED2 is 6-DOF), but base_link -> wrist_link is a 5-joint chain
+        # (joint_1..joint_5). KDL needs len(q) == subchain joints, so an
+        # ee_link with 6 joints in the chain is required. tool_link is
+        # also what Niryo's SRDF declares as the planning-group EE
+        # (group "arm" ends at tool_link), so this aligns FK with the
+        # MoveIt planning target.
+        self.ee_link = "tool_link"
         self.ref_frame = "base_link"
 
         # Fk with pykdl_utils

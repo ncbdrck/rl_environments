@@ -27,7 +27,7 @@ from multiros.utils import ros_kinematics
 
 from urdf_parser_py.urdf import URDF
 from pykdl_utils.kdl_kinematics import KDLKinematics
-from tf.transformations import euler_from_matrix
+from tf.transformations import euler_from_matrix, euler_from_quaternion
 
 register(
     id='RX200RobotEnv_zed2-v0',
@@ -340,15 +340,22 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
     # ---------------------------------------------------
     #   Custom methods for the Custom Robot Environment
 
-    def get_model_pose(self, model_name="red_cube"):
+    def get_model_pose(self, model_name="red_cube", rpy=True):
         """
-        Get the pose of an object in Gazebo
+        Get the pose of an object in Gazebo.
 
         Args:
             model_name: name of the object whose pose is to be retrieved
+            rpy: True if the orientation is to be returned as euler
+                angles (default: True)
 
         Returns:
-            pose: pose of the object as a geometry_msgs/PoseStamped message
+            success: True if the Gazebo lookup succeeded
+            position: object position as a numpy float32 (x, y, z) array,
+                or None on failure
+            orientation: object orientation as a numpy float32 array
+                (roll, pitch, yaw in radians when rpy=True, otherwise
+                quaternion (x, y, z, w)), or None on failure
         """
 
         if not self.real_time:
@@ -360,8 +367,23 @@ class RX200RobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         if not self.real_time:
             gazebo_core.pause_gazebo()
 
-        # pose contains the position and orientation of the object
-        return pose
+        if success:
+            if rpy:
+                orientation = euler_from_quaternion(
+                    [pose.orientation.x, pose.orientation.y,
+                     pose.orientation.z, pose.orientation.w])
+                orientation = np.array(orientation, dtype=np.float32)
+            else:
+                orientation = np.array([pose.orientation.x, pose.orientation.y,
+                                        pose.orientation.z, pose.orientation.w],
+                                       dtype=np.float32)
+
+            position = np.array([pose.position.x, pose.position.y, pose.position.z],
+                                dtype=np.float32)
+
+            return success, position, orientation
+
+        return success, None, None
 
     def spawn_cube_in_gazebo(self, model_pos_x, model_pos_y):
         """

@@ -582,7 +582,7 @@ class UR5ePnPGoalEnv(ur5e_robot_goal_real.UR5eRobotGoalEnv):
         else:
             # fake push goal - hard code one
             # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
-            self.pnp_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
+            self.pnp_goal = np.array([0.600, 0.150, 0.900], dtype=np.float32)
 
 
         if self.log_internal_state:
@@ -1411,11 +1411,14 @@ class UR5ePnPGoalEnv(ur5e_robot_goal_real.UR5eRobotGoalEnv):
     # not used
     def get_random_goal(self, max_tries: int = 100):
         """
-        Function to get a reachable goal
+        Function to get a reachable goal.
+
+        Samples from ``goal_space`` (configured with the lift-and-place
+        z range in the task YAML) and keeps the sampled height so the
+        agent learns to place above the cafe-table.
         """
         for i in range(max_tries):
             goal = self._sample_box(self.goal_space)
-            goal[2] = 0.015  # since the robot is mounted on a table
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1427,10 +1430,12 @@ class UR5ePnPGoalEnv(ur5e_robot_goal_real.UR5eRobotGoalEnv):
 
     def get_random_goal_no_check(self):
         """
-        Function to get a random goal without checking
+        Function to get a random goal without checking.
+
+        z is sampled from ``goal_space`` (place-at-height range from the
+        YAML); the agent must lift the cube off the table to reach it.
         """
         random_goal = self._sample_box(self.goal_space)
-        random_goal[2] = 0.015
 
         return random_goal
 
@@ -1441,7 +1446,9 @@ class UR5ePnPGoalEnv(ur5e_robot_goal_real.UR5eRobotGoalEnv):
         return: random_cube_pose
         """
         random_cube_pose = self._sample_box(self.goal_space)
-        random_cube_pose[2] = 0.015
+        # Cube spawns on top of the cafe-table for the raised-base UR5e
+        # mounting (table_top_z ~= 0.775, cube half-height ~= 0.020).
+        random_cube_pose[2] = 0.795
 
         return random_cube_pose
 
