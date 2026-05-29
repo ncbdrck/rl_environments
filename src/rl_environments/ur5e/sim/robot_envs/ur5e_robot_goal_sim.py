@@ -274,6 +274,8 @@ class UR5eRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         return done
 
     def fk_pykdl(self, action):
+        if action is None or len(action) == 0:
+            return None
         pose = self.kdl_kin.forward(action)
         return np.array([pose[0, 3], pose[1, 3], pose[2, 3]], dtype=np.float32)
 

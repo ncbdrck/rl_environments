@@ -223,6 +223,14 @@ class UR5eRobotEnv(RealBaseEnv.RealBaseEnv):
         Returns:
             ee_position: end-effector position as a numpy array
         """
+        # Defensive: callers (sample_observation) hit this before the
+        # first /joint_states callback can populate self.joint_pos_all
+        # in some env-loop startup races. Return None so the caller's
+        # if ee is None: ee = self.ee_pos fallback keeps the obs
+        # in a defined state instead of raising from KDL.
+        if action is None or len(action) == 0:
+            return None
+
         # Calculate forward kinematics
         pose = self.kdl_kin.forward(action)
 

@@ -384,7 +384,10 @@ class UR5eRobotEnv(GazeboBaseEnv.GazeboBaseEnv):
         return done
 
     def fk_pykdl(self, action):
-        """Forward kinematics via pykdl_utils. Returns EE position (np.ndarray)."""
+        """Forward kinematics via pykdl_utils. Returns EE position (np.ndarray)
+        or None if ``action`` is empty / None (caller can fall back)."""
+        if action is None or len(action) == 0:
+            return None
         pose = self.kdl_kin.forward(action)
         return np.array([pose[0, 3], pose[1, 3], pose[2, 3]], dtype=np.float32)
 
