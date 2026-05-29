@@ -1,4 +1,26 @@
-# NumPy for numerical computations
-numpy
+# Python dependencies for the rl_environments package.
+#
+# Install with:
+#   python3 -m pip install -r requirements.txt
+#
+# These pins match the rest of the framework stack
+# (sb3_ros_support / rl_training_validation) so the env classes,
+# the SB3 learners and the wrappers all agree on the same
+# Gymnasium / NumPy API surface. ROS Noetic dependencies
+# (rospy, sensor_msgs, geometry_msgs, tf, ...) are installed
+# system-wide via apt and are NOT listed here.
+
+# RL API surface (Gymnasium >=0.29 uses the 5-tuple step contract
+# the env code is written against)
+gymnasium==0.29.1
+
+# Numerical / image stack
+numpy==1.23.3
 scipy
 opencv-python
+
+# YAML configs (task / robot YAMLs under config/)
+pyyaml
+
+# URDF parsing for the in-env KDL kinematics
+urdf-parser-py
