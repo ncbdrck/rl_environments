@@ -100,12 +100,12 @@ vx300s: # namespace
 
     # 9-element ordering kept to mirror the joint_angles arrays above
     # (alphabetical, with forearm_roll inserted between elbow and gripper).
-    # Arm joint velocities match the URDF cap pi rad/s; fingers match
-    # URDF 1.0 m/s; the gripper virtual scalar mirrors the finger limit.
+    # Arm joints (and the gripper continuous virtual joint) match the
+    # URDF cap pi rad/s; fingers match URDF 1.0 m/s.
     min_joint_vel:
       - -3.14   # elbow
       - -3.14   # forearm_roll
-      - -1.0    # gripper (virtual scalar; bound by finger physical limit)
+      - -3.14   # gripper (continuous virtual joint, URDF velocity=pi)
       - -1.0    # left_finger
       - -1.0    # right_finger
       - -3.14   # shoulder
@@ -116,7 +116,7 @@ vx300s: # namespace
     max_joint_vel:
       - 3.14    # elbow
       - 3.14    # forearm_roll
-      - 1.0     # gripper (virtual scalar; bound by finger physical limit)
+      - 3.14    # gripper (continuous virtual joint, URDF velocity=pi)
       - 1.0     # left_finger
       - 1.0     # right_finger
       - 3.14    # shoulder
