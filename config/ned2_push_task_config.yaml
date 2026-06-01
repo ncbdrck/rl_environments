@@ -131,14 +131,15 @@ ned2: #namespace
       - 0.0
       - 0.0
 
-    # From Niryo joints_interface docs + MoveIt joint_limits.yaml.
+    # From Niryo joints_interface docs (j1-3 stepper v_max) + the Niryo
+    # URDF velocity limits (j4-6 = 2.0 rad/s).
     max_joint_vel:
       - 1.57    # joint_1 (stepper v_max)
       - 1.047   # joint_2 (stepper v_max)
       - 1.57    # joint_3 (stepper v_max)
-      - 3.14    # joint_4 (dynamixel MoveIt cap)
-      - 3.14    # joint_5 (dynamixel MoveIt cap)
-      - 3.14    # joint_6 (dynamixel MoveIt cap)
+      - 2.0     # joint_4 (dynamixel URDF v_max)
+      - 2.0     # joint_5 (dynamixel URDF v_max)
+      - 2.0     # joint_6 (dynamixel URDF v_max)
 
     # ******** goal space — cube target on the desk
     # Cube sits on the RX200 desk (z ≈ 0.015 above the desk top in

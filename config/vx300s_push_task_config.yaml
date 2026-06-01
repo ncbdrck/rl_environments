@@ -156,27 +156,30 @@ vx300s: #namespace
       - 2.23    # wrist_angle
       - 3.14    # wrist_rotate
 
+    # Arm joint velocity bounds match the URDF cap pi rad/s for every arm
+    # joint; fingers match URDF 1.0 m/s; the gripper virtual scalar mirrors
+    # the binding finger limit.
     min_joint_vel:
-      - -10.0   # elbow
-      - -5.0    # forearm_roll
-      - -10.0   # gripper
+      - -3.14   # elbow
+      - -3.14   # forearm_roll
+      - -1.0    # gripper (virtual scalar; bound by finger physical limit)
       - -1.0    # left_finger
       - -1.0    # right_finger
-      - -10.0   # shoulder
-      - -10.0   # waist
-      - -10.0   # wrist_angle
-      - -10.0   # wrist_rotate
+      - -3.14   # shoulder
+      - -3.14   # waist
+      - -3.14   # wrist_angle
+      - -3.14   # wrist_rotate
 
     max_joint_vel:
-      - 10.0    # elbow
-      - 5.0     # forearm_roll
-      - 10.0    # gripper
+      - 3.14    # elbow
+      - 3.14    # forearm_roll
+      - 1.0     # gripper (virtual scalar; bound by finger physical limit)
       - 1.0     # left_finger
       - 1.0     # right_finger
-      - 10.0    # shoulder
-      - 10.0    # waist
-      - 10.0    # wrist_angle
-      - 10.0    # wrist_rotate
+      - 3.14    # shoulder
+      - 3.14    # waist
+      - 3.14    # wrist_angle
+      - 3.14    # wrist_rotate
 
     # ******** goal space
     position_goal_max: # Maximum XYZ position for the goal

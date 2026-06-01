@@ -192,7 +192,7 @@ class VX300SPnPEnv(vx300s_robot_real.VX300SRobotEnv):
             self.action_space = spaces.Box(low=low, high=high, dtype=np.float32)
 
         else:
-            # 5 arm joints + gripper = 6 DOF
+            # 6 arm joints + gripper = 7 DOF
             low = np.concatenate([np.array(self.min_joint_values), [self.gripper_min]]).astype(np.float32)
             high = np.concatenate([np.array(self.max_joint_values), [self.gripper_max]]).astype(np.float32)
             self.action_space = spaces.Box(low=low, high=high, dtype=np.float32)

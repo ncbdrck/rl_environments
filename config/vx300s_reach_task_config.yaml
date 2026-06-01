@@ -98,27 +98,31 @@ vx300s: # namespace
       - 2.23   # wrist_angle
       - 3.14   # wrist_rotate
 
+    # 9-element ordering kept to mirror the joint_angles arrays above
+    # (alphabetical, with forearm_roll inserted between elbow and gripper).
+    # Arm joint velocities match the URDF cap pi rad/s; fingers match
+    # URDF 1.0 m/s; the gripper virtual scalar mirrors the finger limit.
     min_joint_vel:
-      - -10.0
-      - -10.0
-      - -10.0
-      - -5.0
-      - -5.0
-      - -10.0
-      - -10.0
-      - -10.0
-      - -10.0
+      - -3.14   # elbow
+      - -3.14   # forearm_roll
+      - -1.0    # gripper (virtual scalar; bound by finger physical limit)
+      - -1.0    # left_finger
+      - -1.0    # right_finger
+      - -3.14   # shoulder
+      - -3.14   # waist
+      - -3.14   # wrist_angle
+      - -3.14   # wrist_rotate
 
     max_joint_vel:
-      - 10.0
-      - 10.0
-      - 10.0
-      - 5.0
-      - 5.0
-      - 10.0
-      - 10.0
-      - 10.0
-      - 10.0
+      - 3.14    # elbow
+      - 3.14    # forearm_roll
+      - 1.0     # gripper (virtual scalar; bound by finger physical limit)
+      - 1.0     # left_finger
+      - 1.0     # right_finger
+      - 3.14    # shoulder
+      - 3.14    # waist
+      - 3.14    # wrist_angle
+      - 3.14    # wrist_rotate
 
     # ******** goal space (scaled up vs RX200 to use vx300s reach)
     position_goal_max:

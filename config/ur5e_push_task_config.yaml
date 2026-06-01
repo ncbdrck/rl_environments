@@ -148,9 +148,13 @@ ur5e: # namespace
       - 3.14
       - 3.14
 
+    # Velocities follow the same alphabetical joint order as joint_angles.
+    # Knuckle slot matches URDF velocity=0.5 rad/s (Robotiq 2F-85); arm
+    # slots match URDF velocity=pi (shoulder/elbow; wrist URDF allows 2*pi,
+    # kept tighter as a deliberate safety margin).
     min_joint_vel:
       - -3.15
-      - -2.00
+      - -0.5
       - -3.15
       - -3.15
       - -3.15
@@ -158,7 +162,7 @@ ur5e: # namespace
       - -3.15
     max_joint_vel:
       - 3.15
-      - 2.00
+      - 0.5
       - 3.15
       - 3.15
       - 3.15

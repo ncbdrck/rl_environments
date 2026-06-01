@@ -155,9 +155,10 @@ ned2: #namespace
       - 0.01    # mors_2 (metres)
 
     # Joint velocities (8): 6 arm (rad/s) + 2 mors (m/s, prismatic).
-    # Arm values are conservative — MoveIt joint_limits.yaml permits up to
-    # 1.57 / 1.047 / 1.57 / 3.14 / 3.14 / 3.14 rad/s. URDF mors velocity
-    # limit is 5 m/s.
+    # Arm values are bounded by the Niryo URDF: j1-3 follow the stepper
+    # v_max from the joints_interface docs (1.57 / 1.047 / 1.57 rad/s),
+    # j4-6 follow the URDF dynamixel limit (2.0 rad/s). URDF mors
+    # velocity limit is 5 m/s.
     min_joint_vel:
       - 0.0
       - 0.0
@@ -168,15 +169,16 @@ ned2: #namespace
       - 0.0
       - 0.0
 
-    # Arm: Niryo joints_interface docs + MoveIt joint_limits.yaml.
+    # Arm: Niryo joints_interface docs (j1-3 stepper v_max) + the Niryo
+    # URDF velocity limits (j4-6 = 2.0 rad/s).
     # Mors: URDF velocity="5" (prismatic, m/s).
     max_joint_vel:
       - 1.57    # joint_1 (stepper v_max)
       - 1.047   # joint_2 (stepper v_max)
       - 1.57    # joint_3 (stepper v_max)
-      - 3.14    # joint_4 (dynamixel MoveIt cap)
-      - 3.14    # joint_5 (dynamixel MoveIt cap)
-      - 3.14    # joint_6 (dynamixel MoveIt cap)
+      - 2.0     # joint_4 (dynamixel URDF v_max)
+      - 2.0     # joint_5 (dynamixel URDF v_max)
+      - 2.0     # joint_6 (dynamixel URDF v_max)
       - 5.0     # mors_1 (m/s, URDF)
       - 5.0     # mors_2 (m/s, URDF)
 

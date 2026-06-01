@@ -4,10 +4,10 @@ vx300s: #namespace
     max_steps: 1000  # Maximum number of steps (not currently used)
 
     # ******** Action Space
-    # PnP action space = 5 arm joints + 1 gripper scalar (6 DOF).
+    # PnP action space = 6 arm joints + 1 gripper scalar (7 DOF).
     # The gripper scalar drives both fingers symmetrically:
     #   left_finger = gripper_cmd,  right_finger = -gripper_cmd
-    # so [0.015, 0.037] maps to [closed, fully open].
+    # so [0.021, 0.057] maps to [closed, fully open] (VX300S finger stroke).
 
     min_joint_pos:
       - -3.14  # waist
@@ -27,10 +27,10 @@ vx300s: #namespace
 
     # Single-scalar gripper command (meters, left_finger semantics).
     # right_finger = -gripper_cmd is set in execute_action.
-    gripper_min: 0.015
-    gripper_max: 0.037
+    gripper_min: 0.021
+    gripper_max: 0.057
 
-    # Full 7-element grasp bounds (5 arm + 2 fingers). Used inside the
+    # Full 8-element grasp bounds (6 arm + 2 fingers). Used inside the
     # env for verifying fingers stay inside physical limits after the
     # scalar→pair mapping; also matches the YAML shape used by reach /
     # push for any shared loader.
@@ -154,27 +154,30 @@ vx300s: #namespace
       - 2.23    # wrist_angle
       - 3.14    # wrist_rotate
 
+    # Arm joint velocity bounds match the URDF cap pi rad/s for every arm
+    # joint; fingers match URDF 1.0 m/s; the gripper virtual scalar mirrors
+    # the binding finger limit.
     min_joint_vel:
-      - -10.0   # elbow
-      - -5.0    # forearm_roll
-      - -10.0   # gripper
+      - -3.14   # elbow
+      - -3.14   # forearm_roll
+      - -1.0    # gripper (virtual scalar; bound by finger physical limit)
       - -1.0    # left_finger
       - -1.0    # right_finger
-      - -10.0   # shoulder
-      - -10.0   # waist
-      - -10.0   # wrist_angle
-      - -10.0   # wrist_rotate
+      - -3.14   # shoulder
+      - -3.14   # waist
+      - -3.14   # wrist_angle
+      - -3.14   # wrist_rotate
 
     max_joint_vel:
-      - 10.0    # elbow
-      - 5.0     # forearm_roll
-      - 10.0    # gripper
+      - 3.14    # elbow
+      - 3.14    # forearm_roll
+      - 1.0     # gripper (virtual scalar; bound by finger physical limit)
       - 1.0     # left_finger
       - 1.0     # right_finger
-      - 10.0    # shoulder
-      - 10.0    # waist
-      - 10.0    # wrist_angle
-      - 10.0    # wrist_rotate
+      - 3.14    # shoulder
+      - 3.14    # waist
+      - 3.14    # wrist_angle
+      - 3.14    # wrist_rotate
 
     # ******** goal space
     # PnP goal can be elevated (place at height) — z up to 0.25 m above
