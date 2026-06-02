@@ -467,7 +467,7 @@ class VX300SPushGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
                 self.action_counter = 0
 
             # Real env always runs the rospy.Timer-driven env loop
-            # (paper §7) — there's no MDP pause-step-resume on real hardware.
+            # there's no MDP pause-step-resume on real hardware.
             rospy.Timer(rospy.Duration(1.0 / environment_loop_rate), self.environment_loop)
 
         # for dense reward calculation
@@ -626,7 +626,7 @@ class VX300SPushGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         """
         Function to apply an action to the robot.
 
-        Real env always uses the timer-driven loop (paper §7) — stash the
+        Real env always uses the timer-driven loop — stash the
         action and let environment_loop call execute_action.
 
         Args:

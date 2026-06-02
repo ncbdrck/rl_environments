@@ -50,7 +50,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         * ee_action_type: Whether to use the end effector action space or the joint action space.
         * environment_loop_rate: Rate at which the environment should run. (in Hz) default is 10 Hz - (default operating frequency of the robot)
         * action_cycle_time: Time to wait between two consecutive actions. (in seconds) - default 100 ms (should be equal to larger than the environment loop time "1/environment_loop_rate")
-        * realtime_mode: If True (default), runs the UniROS paper §7 real-time loop — physics is never paused, a rospy.Timer at ``environment_loop_rate`` updates obs/reward/done, and ``step()`` reads the latest cached values. This matches the real env, so policies transfer / concurrent sim+real learning Just Works. If False, runs the standard MDP loop — Gazebo physics is paused around each ``_set_action``, the action is executed synchronously, the agent waits ``action_cycle_time`` for the trajectory, then a fresh obs/reward/done is sampled. The non-realtime mode is for clean RL-algorithm benchmarking where you want every sample to correspond exactly to the post-action world state.
+        * realtime_mode: If True (default), runs the UniROS real-time loop — physics is never paused, a rospy.Timer at ``environment_loop_rate`` updates obs/reward/done, and ``step()`` reads the latest cached values. This matches the real env, so policies transfer / concurrent sim+real learning Just Works. If False, runs the standard MDP loop — Gazebo physics is paused around each ``_set_action``, the action is executed synchronously, the agent waits ``action_cycle_time`` for the trajectory, then a fresh obs/reward/done is sampled. The non-realtime mode is for clean RL-algorithm benchmarking where you want every sample to correspond exactly to the post-action world state.
         * use_smoothing: Whether to use smoothing for actions or not.
         * rgb_obs_only: Whether to use only the RGB image as the observations or not.
         * normal_obs_only: Whether to use only the traditional observations or not.
@@ -356,7 +356,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
                 self.action_counter = 0
 
             # Real-time mode only: spin up the rospy.Timer-driven env loop
-            # (paper §7). Normal mode reuses the same cache but the compute
+            # Normal mode reuses the same cache but the compute
             # happens synchronously inside _set_action — no timer.
             if self.realtime_mode:
                 rospy.Timer(rospy.Duration(1.0 / environment_loop_rate), self.environment_loop)
@@ -473,7 +473,7 @@ class RX200ReacherGoalEnv(rx200_robot_goal_sim.RX200RobotGoalEnv):
         Function to apply an action to the robot.
 
         Real-time mode (default): stash the action; the timer-driven
-        environment_loop is what calls execute_action (paper §7).
+        environment_loop is what calls execute_action.
         Normal MDP mode (realtime_mode=False): execute the action
         synchronously and clear the obs/reward/done cache so the
         _get_* fallbacks resample against the post-action world after
