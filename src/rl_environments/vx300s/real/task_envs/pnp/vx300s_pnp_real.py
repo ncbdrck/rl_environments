@@ -1598,7 +1598,7 @@ class VX300SPnPEnv(vx300s_robot_real.VX300SRobotEnv):
         self.cube_pose_timeout_s = float(
             rospy.get_param('/vx300s/cube_pose_timeout_s', 1.0))
         self.cube_init_pos = rospy.get_param(
-            '/vx300s/cube_init_pos', [0.25, 0.0, 0.015])
+            '/vx300s/cube_init_pos', [0.25, 0.0, 0.020])
 
     # ------------------------------------------------------
     #   Cube-pose subscriber helpers (external vision pipeline)

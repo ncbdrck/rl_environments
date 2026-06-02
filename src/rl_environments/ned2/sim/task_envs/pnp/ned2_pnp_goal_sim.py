@@ -582,7 +582,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         else:
             # Static cube position - hard code one
             # Default static cube spawn pose; verify against your NED2 workspace.
-            cube_init_vector = np.array([0.25, 0.00, 0.015], dtype=np.float32)
+            cube_init_vector = np.array([0.25, 0.00, 0.020], dtype=np.float32)
 
         # spawn the cube. The NED2 robot env signature is
         # spawn_cube_in_gazebo(model_pos_x, model_pos_y) — it picks z

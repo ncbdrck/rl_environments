@@ -238,7 +238,7 @@ vx300s: #namespace
     # If no message arrives within cube_pose_timeout_s, the env falls
     # back to ``cube_init_pos`` and emits a throttled warning.
     cube_pose_timeout_s: 1.0
-    cube_init_pos: [0.25, 0.0, 0.015]
+    cube_init_pos: [0.25, 0.0, 0.020]
 
 
     # ******** Tolerance for the position of the goal

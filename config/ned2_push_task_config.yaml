@@ -167,7 +167,7 @@ ned2: #namespace
 
     # ******** achieved_goal and desired_goal
     # Push semantics: achieved_goal tracks the CUBE pose, not the EE.
-    # The cube sits on the table at z ≈ 0.015 (half of its 0.02 m edge
+    # The cube sits on the table at z ≈ 0.020 (half of its 0.04 m edge
     # above the table surface), so achieved/desired z floors are
     # intentionally below workspace_min.z (which constrains the arm).
     position_achieved_goal_max:
@@ -200,7 +200,7 @@ ned2: #namespace
     # If no message arrives within cube_pose_timeout_s, the env falls
     # back to ``cube_init_pos`` and emits a throttled warning.
     cube_pose_timeout_s: 1.0
-    cube_init_pos: [0.25, 0.0, 0.015]   # aligned with RX200 (both robots
+    cube_init_pos: [0.25, 0.0, 0.020]   # aligned with RX200 (both robots
                                         # sit on the same desk and have
                                         # comparable reach; 0.25 m sits
                                         # comfortably inside Ned2's 490 mm

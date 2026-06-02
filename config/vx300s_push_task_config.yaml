@@ -206,7 +206,7 @@ vx300s: #namespace
 
     # ******** achieved_goal and desired_goal
     # Push semantics: the achieved_goal tracks the CUBE pose, not the EE.
-    # The cube sits on the table at z ≈ 0.015 (half its 0.02 m edge above
+    # The cube sits on the table at z ≈ 0.020 (half its 0.04 m edge above
     # the table surface), so achieved/desired z floors are intentionally
     # below workspace_min.z (which constrains the arm, not the cube).
     position_achieved_goal_max: # Maximum XYZ position for the cube
@@ -247,7 +247,7 @@ vx300s: #namespace
     # fallback path keeps the env constructible during dry-runs
     # even when no vision pipeline is wired up.
     cube_pose_timeout_s: 1.0
-    cube_init_pos: [0.25, 0.0, 0.015]
+    cube_init_pos: [0.25, 0.0, 0.020]
 
 
     # ******** Tolerance for the position of the goal

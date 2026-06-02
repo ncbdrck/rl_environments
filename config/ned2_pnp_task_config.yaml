@@ -234,7 +234,7 @@ ned2: #namespace
     # when those are wired). Same contract as push: subscribe to
     # cube_pose_topic, fall back to cube_init_pos after timeout.
     cube_pose_timeout_s: 1.0
-    cube_init_pos: [0.25, 0.0, 0.015]   # aligned with RX200 — same desk.
+    cube_init_pos: [0.25, 0.0, 0.020]   # aligned with RX200 — same desk.
 
 
     # ******** Tolerance for the position of the goal

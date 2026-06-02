@@ -225,7 +225,7 @@ rx200: #namespace
     # full semantics: subscribe to cube_pose_topic; fall back to
     # cube_init_pos after cube_pose_timeout_s of silence.
     cube_pose_timeout_s: 1.0
-    cube_init_pos: [0.25, 0.0, 0.015]
+    cube_init_pos: [0.25, 0.0, 0.020]
 
 
     # ******** Tolerance for the position of the goal
