@@ -57,13 +57,13 @@ vx300s: #namespace
     # ******** Observation Space
 
     position_ee_max:
-      x: 0.55
-      y: 0.55
-      z: 0.55
+      x: 0.85
+      y: 0.85
+      z: 0.85
     position_ee_min:
-      x: -0.55
-      y: -0.55
-      z: -0.55
+      x: -0.85
+      y: -0.85
+      z: -0.85
 
     rpy_ee_max:
       r: 6.2832
@@ -75,12 +75,12 @@ vx300s: #namespace
       y: -6.2832
 
     position_cube_max:
-      x: 0.55
-      y: 0.55
-      z: 0.55
+      x: 0.85
+      y: 0.85
+      z: 0.85
     position_cube_min:
-      x: -0.55
-      y: -0.55
+      x: -0.85
+      y: -0.85
       z: 0.00
 
     rpy_cube_max:
@@ -195,24 +195,24 @@ vx300s: #namespace
 
     # ******** Workspace
     workspace_max:
-      x: 0.55
-      y: 0.55
-      z: 0.55
+      x: 0.85
+      y: 0.85
+      z: 0.85
     workspace_min:
       x: 0.10
-      y: -0.55
+      y: -0.85
       z: 0.04  # Slightly lower than push to allow approach-from-above
                # without the EE clipping the table edge.
 
     # ******** achieved_goal and desired_goal
     # PnP tracks the CUBE pose as achieved_goal (same as push).
     position_achieved_goal_max:
-      x: 0.55
-      y: 0.55
-      z: 0.55
+      x: 0.85
+      y: 0.85
+      z: 0.85
     position_achieved_goal_min:
-      x: -0.55
-      y: -0.55
+      x: -0.85
+      y: -0.85
       z: 0.005
 
     # Desired-goal bounds = sampling box (so HER-relabeled samples stay

@@ -48,14 +48,14 @@ vx300s: #namespace
 
     # ******** Observation Space
 
-    position_ee_max: # Maximum XYZ position for the end effector (EE) (reach is 55cm)
-      x: 0.55
-      y: 0.55
-      z: 0.55
+    position_ee_max: # Maximum XYZ position for the end effector (EE) (vx300s reach is 750 mm)
+      x: 0.85
+      y: 0.85
+      z: 0.85
     position_ee_min: # Minimum XYZ position for the EE
-      x: -0.55
-      y: -0.55
-      z: -0.55  # Loose obs bound so transient sim states don't trip gymnasium's
+      x: -0.85
+      y: -0.85
+      z: -0.85  # Loose obs bound so transient sim states don't trip gymnasium's
                 # obs-not-in-space warning. The actual table floor is enforced
                 # by workspace_min.z + the per-link FK safety check, not here.
 
@@ -69,12 +69,12 @@ vx300s: #namespace
       y: -6.2832
 
     position_cube_max: # Maximum XYZ position for the cube (since it can be with the gripper)
-      x: 0.55
-      y: 0.55
-      z: 0.55
+      x: 0.85
+      y: 0.85
+      z: 0.85
     position_cube_min: # Minimum XYZ position for the cube
-      x: -0.55
-      y: -0.55
+      x: -0.85
+      y: -0.85
       z: 0.00
 
     rpy_cube_max: # Maximum rpy for the cube
@@ -132,7 +132,7 @@ vx300s: #namespace
       y: -1.00
       z: -0.50
 
-    max_distance: 0.55 # Maximum distance from cube to the desired GOAL (0.55m is the max reach of the robot)
+    max_distance: 1.50 # Diagonal of the 0.85 m workspace (vx300s 750 mm reach)
 
     min_joint_angles:
       - -1.76   # elbow
@@ -194,12 +194,12 @@ vx300s: #namespace
 
     # ******** Workspace -  we need to restrict the workspace to prevent the robot from hitting the table or itself
     workspace_max: # Maximum XYZ position for the workspace
-      x: 0.55
-      y: 0.55
-      z: 0.55
+      x: 0.85
+      y: 0.85
+      z: 0.85
     workspace_min: # Minimum XYZ position for the workspace (active EE/link safety floor)
       x: 0.10
-      y: -0.55
+      y: -0.85
       z: 0.06  # EE floor for push: higher than reach because the EE pushes a
                # 2 cm cube sitting on the table; needs gripper-tip clearance.
 
@@ -210,12 +210,12 @@ vx300s: #namespace
     # the table surface), so achieved/desired z floors are intentionally
     # below workspace_min.z (which constrains the arm, not the cube).
     position_achieved_goal_max: # Maximum XYZ position for the cube
-      x: 0.55
-      y: 0.55
-      z: 0.55
+      x: 0.85
+      y: 0.85
+      z: 0.85
     position_achieved_goal_min: # Minimum XYZ position for the cube
-      x: -0.55
-      y: -0.55
+      x: -0.85
+      y: -0.85
       z: 0.005  # half a cube-edge above the table
 
     # In this task, this is the same as goal-sampling range.
