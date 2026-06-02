@@ -872,9 +872,9 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         02. EE rpy - 3
         03. Vector to the goal (normalized linear distance) - 3
         04. Euclidian distance (cube to push goal)- 1
-        05. Current Joint values - 6 (NED2 has 6 arm joints)
+        05. Current Joint values - 8 (6 arm + 2 mors fingers)
         06. Previous action - 6 or 3 (joint or ee)
-        07. Joint velocities - 6
+        07. Joint velocities - 8
         08. Cube pos - 3
         09. Cube rpy - 3
         10. Cube linear velocity (finite-diff) - 3

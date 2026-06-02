@@ -605,7 +605,7 @@ class UR5ePnPGoalEnv(ur5e_robot_goal_real.UR5eRobotGoalEnv):
         if self.multi_goal:
             cube_xyz = (np.asarray(self.cube_pos, dtype=np.float32)
                         if self.cube_pos is not None
-                        else np.array([0.25, 0.0, 0.015], dtype=np.float32))
+                        else np.array([0.5, 0.0, 0.795], dtype=np.float32))
             self.intermediate_goal = cube_xyz + np.array(
                 [0.0, 0.0, float(self.lift_height)], dtype=np.float32)
 
@@ -1635,8 +1635,11 @@ class UR5ePnPGoalEnv(ur5e_robot_goal_real.UR5eRobotGoalEnv):
         # still construct without these rosparams set.
         self.cube_pose_timeout_s = float(
             rospy.get_param('/ur5e/cube_pose_timeout_s', 1.0))
+        # UR5e cube sits on the cafe table at table_top_z 0.775 +
+        # cube half-edge 0.020 = 0.795. Earlier 0.015 was an RX200
+        # leftover that would have spawned the cube below the floor.
         self.cube_init_pos = rospy.get_param(
-            '/ur5e/cube_init_pos', [0.25, 0.0, 0.015])
+            '/ur5e/cube_init_pos', [0.5, 0.0, 0.795])
 
     # ------------------------------------------------------
     #   Cube-pose subscriber helpers (external vision pipeline)

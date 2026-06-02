@@ -773,7 +773,7 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
         01. EE pos - 3
         02. Vector to the goal (normalized linear distance) - 3
         03. Euclidian distance (ee to reach goal)- 1
-        04. Current Joint values - 6
+        04. Current Joint values - 8 (6 arm + 2 mors fingers)
         05. Previous action - 6 or 3 (joint or ee)
         06. Joint velocities - 8
 

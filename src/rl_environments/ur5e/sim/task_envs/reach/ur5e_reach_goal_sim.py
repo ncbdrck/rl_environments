@@ -426,8 +426,11 @@ class UR5eReacherGoalEnv(ur5e_robot_goal_sim.UR5eRobotGoalEnv):
                 rospy.loginfo("Reach Goal--->" + str(self.reach_goal))
 
         else:
-            # fake Reach goal - hard code one
-            self.reach_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
+            # Static fallback Reach goal — sits on the cafe table top
+            # (table_top_z 0.775 + cube half-edge 0.020 = 0.795). The
+            # earlier z=0.015 was an RX200-leftover and fell below the
+            # UR5e workspace floor.
+            self.reach_goal = np.array([0.500, 0.000, 0.795], dtype=np.float32)
             if self.log_internal_state:
                 rospy.logwarn("Hard Coded Reach Goal--->" + str(self.reach_goal))
 
