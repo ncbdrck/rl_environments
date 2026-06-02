@@ -606,7 +606,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
             # fake pnp goal - hard code one
             # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
             # TODO: confirm NED2 pnp static goal pose
-            self.pnp_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
+            self.pnp_goal = np.array([0.250, 0.000, 0.150], dtype=np.float32)
 
 
         if self.log_internal_state:
@@ -631,7 +631,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         if self.multi_goal:
             cube_xyz = (np.asarray(self.cube_pos, dtype=np.float32)
                         if getattr(self, "cube_pos", None) is not None
-                        else np.array([0.25, 0.0, 0.015], dtype=np.float32))
+                        else np.array([0.25, 0.0, 0.020], dtype=np.float32))
             self.intermediate_goal = cube_xyz + np.array(
                 [0.0, 0.0, float(self.lift_height)], dtype=np.float32)
 
@@ -1450,7 +1450,6 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         """
         for i in range(max_tries):
             goal = self._sample_box(self.goal_space)
-            goal[2] = 0.015  # since the robot is mounted on a table
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1465,7 +1464,6 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         Function to get a random goal without checking
         """
         random_goal = self._sample_box(self.goal_space)
-        random_goal[2] = 0.015
 
         return random_goal
 
@@ -1480,7 +1478,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         y-offset nudge guaranteed to land outside the success radius.
         """
         random_cube_pose = self._sample_box(self.goal_space)
-        random_cube_pose[2] = 0.015
+        random_cube_pose[2] = 0.020
 
         goal = getattr(self, "pnp_goal", None)
         if goal is None:
@@ -1491,7 +1489,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
             if np.linalg.norm(random_cube_pose - goal_arr) > self.reach_tolerance:
                 return random_cube_pose
             random_cube_pose = self._sample_box(self.goal_space)
-            random_cube_pose[2] = 0.015
+            random_cube_pose[2] = 0.020
 
         nudge = float(self.reach_tolerance) + 0.02
         random_cube_pose[1] = goal_arr[1] + nudge

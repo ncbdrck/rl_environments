@@ -511,7 +511,7 @@ class VX300SPnPEnv(vx300s_robot_sim.VX300SRobotEnv):
         # if we don't spwan cube randomly, we can hard code one
         else:
             # Static cube position - hard code one
-            cube_init_vector= np.array([0.180, 0.000, 0.015], dtype=np.float32)
+            cube_init_vector= np.array([0.180, 0.000, 0.020], dtype=np.float32)
 
         # spawn the cube
         self.spawn_cube_in_gazebo(model_pos_x=cube_init_vector[0],
@@ -532,7 +532,7 @@ class VX300SPnPEnv(vx300s_robot_sim.VX300SRobotEnv):
         else:
             # fake push goal - hard code one
             # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
-            self.pnp_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
+            self.pnp_goal = np.array([0.250, 0.000, 0.150], dtype=np.float32)
 
 
         if self.log_internal_state:
@@ -550,7 +550,7 @@ class VX300SPnPEnv(vx300s_robot_sim.VX300SRobotEnv):
         if self.multi_goal:
             cube_xyz = (np.asarray(self.cube_pos, dtype=np.float32)
                         if self.cube_pos is not None
-                        else np.array([0.25, 0.0, 0.015], dtype=np.float32))
+                        else np.array([0.25, 0.0, 0.020], dtype=np.float32))
             self.intermediate_goal = cube_xyz + np.array(
                 [0.0, 0.0, float(self.lift_height)], dtype=np.float32)
 
@@ -1377,7 +1377,7 @@ class VX300SPnPEnv(vx300s_robot_sim.VX300SRobotEnv):
         random_cube_pose = self._sample_box(self.goal_space)
         # Cube spawns flush on the cafe-table for the table-mounted
         # VX300S (z origin at the table surface; cube half-height = 0.015).
-        random_cube_pose[2] = 0.015
+        random_cube_pose[2] = 0.020
 
         return random_cube_pose
 

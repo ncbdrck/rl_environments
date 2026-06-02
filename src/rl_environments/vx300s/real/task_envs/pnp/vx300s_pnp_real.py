@@ -569,7 +569,7 @@ class VX300SPnPEnv(vx300s_robot_real.VX300SRobotEnv):
         if self.multi_goal:
             cube_xyz = (np.asarray(self.cube_pos, dtype=np.float32)
                         if self.cube_pos is not None
-                        else np.array([0.25, 0.0, 0.015], dtype=np.float32))
+                        else np.array([0.25, 0.0, 0.020], dtype=np.float32))
             self.intermediate_goal = cube_xyz + np.array(
                 [0.0, 0.0, float(self.lift_height)], dtype=np.float32)
 
@@ -1418,7 +1418,7 @@ class VX300SPnPEnv(vx300s_robot_real.VX300SRobotEnv):
         random_cube_pose = self._sample_box(self.goal_space)
         # Cube spawns flush on the cafe-table for the table-mounted
         # VX300S (z origin at the table surface; cube half-height = 0.015).
-        random_cube_pose[2] = 0.015
+        random_cube_pose[2] = 0.020
 
         return random_cube_pose
 

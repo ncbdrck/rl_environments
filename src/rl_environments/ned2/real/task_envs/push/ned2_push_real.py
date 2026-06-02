@@ -558,7 +558,7 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
             self.push_goal = self.get_random_goal_no_check()
         else:
             # TODO: confirm NED2 push static goal pose on the real workspace
-            self.push_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
+            self.push_goal = np.array([0.250, 0.000, 0.020], dtype=np.float32)
             if self.log_internal_state:
                 rospy.logwarn("Hard Coded Push Goal--->" + str(self.push_goal))
 
@@ -1301,7 +1301,7 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         """
         for i in range(max_tries):
             goal = self._sample_box(self.goal_space)
-            goal[2] = 0.015  # since the robot is mounted on a table
+            goal[2] = 0.020  # cube sits on the floor; 4 cm cube → half-edge 0.020
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1316,7 +1316,7 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         Function to get a random goal without checking
         """
         random_goal = self._sample_box(self.goal_space)
-        random_goal[2] = 0.015
+        random_goal[2] = 0.020
 
         return random_goal
 
@@ -1327,7 +1327,7 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         return: random_cube_pose
         """
         random_cube_pose = self._sample_box(self.goal_space)
-        random_cube_pose[2] = 0.015
+        random_cube_pose[2] = 0.020
 
         return random_cube_pose
 
@@ -1496,7 +1496,7 @@ class NED2PushEnv(ned2_robot_real.NED2RobotEnv):
         self.cube_pose_timeout_s = float(
             rospy.get_param('/ned2/cube_pose_timeout_s', 1.0))
         self.cube_init_pos = rospy.get_param(
-            '/ned2/cube_init_pos', [0.25, 0.0, 0.015])
+            '/ned2/cube_init_pos', [0.25, 0.0, 0.020])
 
     # ------------------------------------------------------
     #   Cube-pose subscriber helpers (external vision pipeline)

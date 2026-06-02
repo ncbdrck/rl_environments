@@ -531,7 +531,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
             # fake push goal - hard code one
             # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
             # TODO: confirm NED2 push static goal pose
-            self.push_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
+            self.push_goal = np.array([0.250, 0.000, 0.020], dtype=np.float32)
 
 
         if self.log_internal_state:
@@ -1243,7 +1243,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         """
         for i in range(max_tries):
             goal = self._sample_box(self.goal_space)
-            goal[2] = 0.015  # since the robot is mounted on a table
+            goal[2] = 0.020  # cube sits on the floor; 4 cm cube → half-edge 0.020
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1258,7 +1258,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         Function to get a random goal without checking
         """
         random_goal = self._sample_box(self.goal_space)
-        random_goal[2] = 0.015
+        random_goal[2] = 0.020
 
         return random_goal
 
@@ -1273,7 +1273,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         y-offset nudge guaranteed to land outside the success radius.
         """
         random_cube_pose = self._sample_box(self.goal_space)
-        random_cube_pose[2] = 0.015
+        random_cube_pose[2] = 0.020
 
         goal = getattr(self, "push_goal", None)
         if goal is None:
@@ -1284,7 +1284,7 @@ class NED2PushGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
             if np.linalg.norm(random_cube_pose - goal_arr) > self.reach_tolerance:
                 return random_cube_pose
             random_cube_pose = self._sample_box(self.goal_space)
-            random_cube_pose[2] = 0.015
+            random_cube_pose[2] = 0.020
 
         nudge = float(self.reach_tolerance) + 0.02
         random_cube_pose[1] = goal_arr[1] + nudge

@@ -551,7 +551,7 @@ class NED2PnPEnv(ned2_robot_sim.NED2RobotEnv):
             # fake pnp goal - hard code one
             # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
             # TODO: confirm NED2 pnp static goal pose
-            self.pnp_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
+            self.pnp_goal = np.array([0.250, 0.000, 0.150], dtype=np.float32)
 
 
         if self.log_internal_state:
@@ -569,7 +569,7 @@ class NED2PnPEnv(ned2_robot_sim.NED2RobotEnv):
         if self.multi_goal:
             cube_xyz = (np.asarray(self.cube_pos, dtype=np.float32)
                         if getattr(self, "cube_pos", None) is not None
-                        else np.array([0.25, 0.0, 0.015], dtype=np.float32))
+                        else np.array([0.25, 0.0, 0.020], dtype=np.float32))
             self.intermediate_goal = cube_xyz + np.array(
                 [0.0, 0.0, float(self.lift_height)], dtype=np.float32)
 
@@ -1382,7 +1382,6 @@ class NED2PnPEnv(ned2_robot_sim.NED2RobotEnv):
         """
         for i in range(max_tries):
             goal = self._sample_box(self.goal_space)
-            goal[2] = 0.015  # since the robot is mounted on a table
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1397,7 +1396,6 @@ class NED2PnPEnv(ned2_robot_sim.NED2RobotEnv):
         Function to get a random goal without checking
         """
         random_goal = self._sample_box(self.goal_space)
-        random_goal[2] = 0.015
 
         return random_goal
 
@@ -1415,7 +1413,7 @@ class NED2PnPEnv(ned2_robot_sim.NED2RobotEnv):
         match in xz, which is vanishingly unlikely with float32 RNG.
         """
         random_cube_pose = self._sample_box(self.goal_space)
-        random_cube_pose[2] = 0.015
+        random_cube_pose[2] = 0.020
 
         # When pnp_goal hasn't been sampled yet (very first call from
         # __init__ before the episode loop) just return the raw sample.
@@ -1428,7 +1426,7 @@ class NED2PnPEnv(ned2_robot_sim.NED2RobotEnv):
             if np.linalg.norm(random_cube_pose - goal_arr) > self.reach_tolerance:
                 return random_cube_pose
             random_cube_pose = self._sample_box(self.goal_space)
-            random_cube_pose[2] = 0.015
+            random_cube_pose[2] = 0.020
 
         # Fallback: nudge y away from the goal so the cube is at least
         # outside the reach tolerance in one dimension.

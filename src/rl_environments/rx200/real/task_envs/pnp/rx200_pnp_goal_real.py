@@ -586,7 +586,7 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         else:
             # fake push goal - hard code one
             # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
-            self.pnp_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
+            self.pnp_goal = np.array([0.250, 0.000, 0.150], dtype=np.float32)
 
 
         if self.log_internal_state:
@@ -604,7 +604,7 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         if self.multi_goal:
             cube_xyz = (np.asarray(self.cube_pos, dtype=np.float32)
                         if self.cube_pos is not None
-                        else np.array([0.25, 0.0, 0.015], dtype=np.float32))
+                        else np.array([0.25, 0.0, 0.020], dtype=np.float32))
             self.intermediate_goal = cube_xyz + np.array(
                 [0.0, 0.0, float(self.lift_height)], dtype=np.float32)
 
@@ -1418,7 +1418,6 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         """
         for i in range(max_tries):
             goal = self._sample_box(self.goal_space)
-            goal[2] = 0.015  # since the robot is mounted on a table
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1433,7 +1432,6 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         Function to get a random goal without checking
         """
         random_goal = self._sample_box(self.goal_space)
-        random_goal[2] = 0.015
 
         return random_goal
 
@@ -1444,7 +1442,7 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         return: random_cube_pose
         """
         random_cube_pose = self._sample_box(self.goal_space)
-        random_cube_pose[2] = 0.015
+        random_cube_pose[2] = 0.020
 
         return random_cube_pose
 
@@ -1624,7 +1622,7 @@ class RX200PnPGoalEnv(rx200_robot_goal_real.RX200RobotGoalEnv):
         self.cube_pose_timeout_s = float(
             rospy.get_param('/rx200/cube_pose_timeout_s', 1.0))
         self.cube_init_pos = rospy.get_param(
-            '/rx200/cube_init_pos', [0.25, 0.0, 0.015])
+            '/rx200/cube_init_pos', [0.25, 0.0, 0.020])
 
     # ------------------------------------------------------
     #   Cube-pose subscriber helpers (external vision pipeline)

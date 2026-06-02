@@ -510,7 +510,7 @@ class RX200PushGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         # if we don't spwan cube randomly, we can hard code one
         else:
             # Static cube position - hard code one
-            cube_init_vector= np.array([0.180, 0.000, 0.015], dtype=np.float32)
+            cube_init_vector= np.array([0.180, 0.000, 0.020], dtype=np.float32)
 
         # spawn the cube
         self.spawn_cube_in_gazebo(model_pos_x=cube_init_vector[0],
@@ -531,7 +531,7 @@ class RX200PushGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         else:
             # fake push goal - hard code one
             # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
-            self.push_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
+            self.push_goal = np.array([0.250, 0.000, 0.020], dtype=np.float32)
 
 
         if self.log_internal_state:
@@ -1237,7 +1237,7 @@ class RX200PushGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         """
         for i in range(max_tries):
             goal = self._sample_box(self.goal_space)
-            goal[2] = 0.015  # since the robot is mounted on a table
+            goal[2] = 0.020  # cube sits on the floor; 4 cm cube → half-edge 0.020
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1252,7 +1252,7 @@ class RX200PushGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         Function to get a random goal without checking
         """
         random_goal = self._sample_box(self.goal_space)
-        random_goal[2] = 0.015
+        random_goal[2] = 0.020
 
         return random_goal
 
@@ -1263,7 +1263,7 @@ class RX200PushGoalEnv(rx200_robot_goal_sim_zed2.RX200RobotGoalEnv):
         return: random_cube_pose
         """
         random_cube_pose = self._sample_box(self.goal_space)
-        random_cube_pose[2] = 0.015
+        random_cube_pose[2] = 0.020
 
         return random_cube_pose
 

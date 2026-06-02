@@ -140,7 +140,7 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
                                                  model_folder="/models/block",
                                                  model_name="red_cube", namespace=namespace,
                                                  pos_x=0.35,
-                                                 pos_z=0.795 if load_table else 0.015)
+                                                 pos_z=0.795 if load_table else 0.020)
 
             # above function pauses the simulation, so we need to unpause it for real-time
             if self.real_time:
@@ -412,7 +412,7 @@ class VX300SRobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         if self.load_table:
             model_pos_z = 0.795
         else:
-            model_pos_z = 0.015
+            model_pos_z = 0.020
 
         # spawn a cube
         done = gazebo_models.spawn_sdf_model_gazebo(pkg_name="viperx300s_description", file_name="block.sdf",

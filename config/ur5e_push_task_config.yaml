@@ -248,7 +248,12 @@ ur5e: # namespace
     table_size_y: 0.913
     table_xy_margin: 0.03
     safety_z_margin: 0.015
-    safety_z_margin_strict: 0.030
+    # Strict margin matches the non-strict value for push because the EE
+    # must reach the cube center at z=0.795 (table_top_z 0.775 + cube
+    # half-edge 0.020). With strict=0.030 the per-link safety check
+    # rejected every action that placed the EE link low enough to make
+    # contact with the cube, so real push could never train.
+    safety_z_margin_strict: 0.015
     max_joint_delta: 0.5
     max_joint_delta_strict: 0.15
     joint_state_timeout_s: 0.5

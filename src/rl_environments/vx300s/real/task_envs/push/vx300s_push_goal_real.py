@@ -571,7 +571,7 @@ class VX300SPushGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         else:
             # fake push goal - hard code one
             # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
-            self.push_goal = np.array([0.250, 0.000, 0.015], dtype=np.float32)
+            self.push_goal = np.array([0.250, 0.000, 0.020], dtype=np.float32)
             if self.log_internal_state:
                 rospy.logwarn("Hard Coded Push Goal--->" + str(self.push_goal))
 
@@ -1290,7 +1290,7 @@ class VX300SPushGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         """
         for i in range(max_tries):
             goal = self._sample_box(self.goal_space)
-            goal[2] = 0.015  # since the robot is mounted on a table
+            goal[2] = 0.020  # cube sits on the floor; 4 cm cube → half-edge 0.020
 
             if self.test_goal_pos(goal):
                 return True, goal
@@ -1305,7 +1305,7 @@ class VX300SPushGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         Function to get a random goal without checking
         """
         random_goal = self._sample_box(self.goal_space)
-        random_goal[2] = 0.015
+        random_goal[2] = 0.020
 
         return random_goal
 
@@ -1316,7 +1316,7 @@ class VX300SPushGoalEnv(vx300s_robot_goal_real.VX300SRobotGoalEnv):
         return: random_cube_pose
         """
         random_cube_pose = self._sample_box(self.goal_space)
-        random_cube_pose[2] = 0.015
+        random_cube_pose[2] = 0.020
 
         return random_cube_pose
 
