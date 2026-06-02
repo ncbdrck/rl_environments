@@ -223,7 +223,6 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         # ---------- kinect
         self.use_camera = use_camera
 
-        # todo: check the camera topics
         if self.use_camera:
             # depth image subscriber
             self.kinect_depth_sub = rospy.Subscriber("/head_mount_kinect2/depth/image_raw", Image,
@@ -759,7 +758,6 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         cv_image_depth = bridge.imgmsg_to_cv2(data, desired_encoding="32FC1")
         self.cv_image_depth = cv_image_depth
         # print("Shape of depth:", cv_image_depth.shape)  # for debugging
-        # todo: for the CNN policy
         # (480, 640) - for pytorch, this needs to be converted to (1, 480, 640)
 
     def kinect_rgb_callback(self, img_msg):
@@ -775,7 +773,6 @@ class NED2RobotGoalEnv(GazeboGoalEnv.GazeboGoalEnv):
         # Convert from BGR to RGB (required for pytorch or tensorflow CNNs) - (480, 640, 3)
         self.cv_image_rgb = cv2.cvtColor(cv_image_bgr, cv2.COLOR_BGR2RGB)
         # print("Shape of rgb:", cv_image_rgb.shape)  # for debugging
-        # todo: for the CNN policy
         # (480, 640, 3) - for pytorch, this needs to be converted to (3, 480, 640)
 
     def wrist_camera_rgb_callback(self, img_msg):

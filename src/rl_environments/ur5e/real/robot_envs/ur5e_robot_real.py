@@ -112,7 +112,6 @@ class UR5eRobotEnv(RealBaseEnv.RealBaseEnv):
         self.use_kinect = use_kinect
         self.use_zed2 = use_zed2
 
-        # todo: find the actual topic names
         if self.use_kinect:
             # depth image subscriber
             self.kinect_depth_sub = rospy.Subscriber("/head_mount_kinect2/depth/image_raw", Image,
@@ -126,7 +125,6 @@ class UR5eRobotEnv(RealBaseEnv.RealBaseEnv):
             self.kinect_rgb = Image()
             self.cv_image_rgb = None
 
-        # todo: find the actual topic names
         if self.use_zed2:
             # depth image subscriber
             self.zed2_depth_sub = rospy.Subscriber("/ur5e/zed2/depth/depth_registered", Image,
@@ -555,7 +553,6 @@ class UR5eRobotEnv(RealBaseEnv.RealBaseEnv):
         cv_image_depth = bridge.imgmsg_to_cv2(data, desired_encoding="32FC1")
         self.cv_image_depth = cv_image_depth
         # print("Shape of depth:", cv_image_depth.shape)  # for debugging
-        # todo: for the CNN policy
         # (480, 640) - for pytorch, this needs to be converted to (1, 480, 640)
 
     def kinect_rgb_callback(self, img_msg):
@@ -571,7 +568,6 @@ class UR5eRobotEnv(RealBaseEnv.RealBaseEnv):
         # Convert from BGR to RGB (required for pytorch or tensorflow CNNs) - (480, 640, 3)
         self.cv_image_rgb = cv2.cvtColor(cv_image_bgr, cv2.COLOR_BGR2RGB)
         # print("Shape of rgb:", cv_image_rgb.shape)  # for debugging
-        # todo: for the CNN policy
         # (480, 640, 3) - for pytorch, this needs to be converted to (3, 480, 640)
 
     def zed2_depth_callback(self, data):
@@ -585,7 +581,6 @@ class UR5eRobotEnv(RealBaseEnv.RealBaseEnv):
         cv_image_depth = bridge.imgmsg_to_cv2(data, desired_encoding="32FC1")
         self.cv_image_depth = cv_image_depth
         # print("Shape of depth:", cv_image_depth.shape)  # for debugging
-        # todo: for the CNN policy
         # (720, 1280) - for pytorch, this needs to be converted to (1, 720, 1280)
 
     def zed2_rgb_callback(self, img_msg):
@@ -601,7 +596,6 @@ class UR5eRobotEnv(RealBaseEnv.RealBaseEnv):
         # Convert from BGR to RGB (required for pytorch or tensorflow CNNs) - (720, 1280, 3)
         self.cv_image_rgb = cv2.cvtColor(cv_image_bgr, cv2.COLOR_BGR2RGB)
         # print("Shape of rgb:", cv_image_rgb.shape)  # for debugging
-        # todo: for the CNN policy
         # (720, 1280, 3) - for pytorch, this needs to be converted to (3, 720, 1280)
 
     # helper fn for _check_connection_and_readiness

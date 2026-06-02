@@ -614,7 +614,7 @@ class NED2PushGoalEnv(ned2_robot_goal_real.NED2RobotGoalEnv):
             #  Get a random pos - np.array
             self.push_goal = self.get_random_goal_no_check()
         else:
-            # TODO: confirm NED2 push static goal pose on the real workspace
+            # Default static fallback goal; measure on your physical NED2 workspace before relying on it.
             self.push_goal = np.array([0.250, 0.000, 0.020], dtype=np.float32)
             if self.log_internal_state:
                 rospy.logwarn("Hard Coded Push Goal--->" + str(self.push_goal))

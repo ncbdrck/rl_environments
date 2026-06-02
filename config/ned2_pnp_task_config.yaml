@@ -252,9 +252,9 @@ ned2: #namespace
     grasp_dist_thresh: 0.05    # m, EE-to-cube distance ceiling
     grasp_finger_thresh: 0.0   # m, joint_base_to_mors_1 position ceiling
                                # (treat as closed if reading < this).
-                               # TODO: empirically tune against an actual
-                               # cube grasp — the stroke is tiny (20 mm)
-                               # so the exact threshold matters.
+                               # Calibrate against an actual cube grasp on
+                               # hardware — the stroke is tiny (20 mm), so
+                               # the exact threshold matters.
 
     # Multi-goal scaffolding (used only when multi_goal=True).
     lift_height: 0.15  # m, intermediate (lift) goal above the cube

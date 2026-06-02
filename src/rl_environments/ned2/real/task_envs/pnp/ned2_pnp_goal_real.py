@@ -658,7 +658,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_real.NED2RobotGoalEnv):
         else:
             # fake pnp goal - hard code one
             # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
-            # TODO: confirm NED2 pnp static goal pose on the real workspace
+            # Default static fallback goal; measure on your physical NED2 workspace before relying on it.
             self.pnp_goal = np.array([0.250, 0.000, 0.150], dtype=np.float32)
 
 

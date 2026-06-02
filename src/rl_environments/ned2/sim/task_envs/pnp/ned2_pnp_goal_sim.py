@@ -581,7 +581,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         # if we don't spwan cube randomly, we can hard code one
         else:
             # Static cube position - hard code one
-            # TODO: confirm NED2 pnp static cube spawn pose
+            # Default static cube spawn pose; verify against your NED2 workspace.
             cube_init_vector = np.array([0.25, 0.00, 0.015], dtype=np.float32)
 
         # spawn the cube. The NED2 robot env signature is
@@ -605,7 +605,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
         else:
             # fake pnp goal - hard code one
             # We don't need to worry if we are using a table or not since we get cube pos wrt to base_link
-            # TODO: confirm NED2 pnp static goal pose
+            # Default static goal pose; verify against your NED2 workspace.
             self.pnp_goal = np.array([0.250, 0.000, 0.150], dtype=np.float32)
 
 
@@ -1680,7 +1680,7 @@ class NED2PnPGoalEnv(ned2_robot_goal_sim.NED2RobotGoalEnv):
             gazebo_pid: process id for launched gazebo
 
         """
-        # TODO: confirm NED2 pnp world file. ned2_reach uses
+        # ned2_reach uses
         # 'ned2_workspace_only.world' via the train script; the call below
         # delegates to gazebo_core.launch_gazebo's defaults to mirror the
         # NED2 push goal template — the train script can override
