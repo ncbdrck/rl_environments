@@ -109,10 +109,17 @@ class UR5eReacherGoalEnv(ur5e_robot_goal_real.UR5eRobotGoalEnv):
 
         rospy.loginfo(f"Starting {self.node_name}")
 
-        if (1.0 / environment_loop_rate) > action_cycle_time:
-            rospy.logerr("The environment loop rate is greater than the action cycle time. Exiting the program!")
-            rospy.signal_shutdown("Exiting the program!")
-            exit()
+        # When action_cycle_time is 0 the env loop runs without an explicit
+        # per-action sleep (deterministic / fast-step mode), so a strict
+        # period-vs-cycle inequality does not apply. Only enforce the guard
+        # when the caller actually requested a positive action cycle.
+        if action_cycle_time > 0.0 and (1.0 / environment_loop_rate) > action_cycle_time:
+            raise ValueError(
+                f"environment_loop_rate=1/{1.0/environment_loop_rate:.3f}s exceeds "
+                f"action_cycle_time={action_cycle_time:.3f}s; the cached observation "
+                f"could be older than one action cycle. Either lower environment_loop_rate "
+                f"or raise action_cycle_time."
+            )
 
         self.log_internal_state = log_internal_state
 

@@ -150,6 +150,14 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
                                 "joint_5",
                                 "joint_6"]
 
+        # Physical gripper joints (mors_1 / mors_2 prismatic fingers) — the
+        # joint_state_callback references this list to build the obs-facing
+        # joint vector by name. Empty list means "no gripper present"
+        # (the callback's name-lookup safely returns just the arm joints
+        # in that case).
+        self.gripper_joint_names = ["joint_base_to_mors_1",
+                                    "joint_base_to_mors_2"]
+
         # low-level control
         # The rostopic for joint trajectory controller
         self.arm_controller_pub = rospy.Publisher('niryo_robot_follow_joint_trajectory_controller/command',
@@ -301,6 +309,15 @@ class NED2RobotEnv(RealBaseEnv.RealBaseEnv):
             # extra finger / mimic joint) doesn't silently scramble the
             # observation. The expected joint set is arm + (gripper
             # when the gripper URDF is loaded).
+            #
+            # Race guard: the joint_state subscriber is registered early
+            # in __init__ (so the connection-readiness check can use
+            # it), but ``arm_joint_names`` / ``gripper_joint_names`` are
+            # populated later. On real hardware /joint_states may already
+            # be publishing, so the callback can fire before those
+            # attributes exist. Skip the build until they're set.
+            if not hasattr(self, "arm_joint_names") or not hasattr(self, "gripper_joint_names"):
+                return
             wanted = list(self.arm_joint_names) + list(self.gripper_joint_names)
             name_to_idx = {n: i for i, n in enumerate(joint_state.name)}
             indices = [name_to_idx[n] for n in wanted if n in name_to_idx]
