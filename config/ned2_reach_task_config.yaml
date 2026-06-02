@@ -103,14 +103,15 @@ ned2: #namespace
       y: -0.15
       z: 0.15
 
-    # ******** Workspace -  we need to restrict the workspace to prevent the robot from hitting the table or itself
+    # ******** Workspace - restrict to prevent the robot hitting the table or itself.
+    # Ned2 reach is ~0.49 m (Niryo spec); bounds sized to that envelope.
     workspace_max: # Maximum XYZ position for the workspace
-      x: 0.55
-      y: 0.55
-      z: 0.55
+      x: 0.50
+      y: 0.50
+      z: 0.50
     workspace_min: # Minimum XYZ position for the workspace
       x: 0.10
-      y: -0.55
+      y: -0.50
       z: 0.10  # Near zero to prevent going below the table
 
 
@@ -119,23 +120,25 @@ ned2: #namespace
     # workspace_min.z (0.10). An achieved goal at z<0.10 would be
     # unreachable under the safety contract.
     position_achieved_goal_max: # Maximum XYZ position for the achieved_goal
-      x: 0.55
-      y: 0.55
-      z: 0.55
+      x: 0.50
+      y: 0.50
+      z: 0.50
     position_achieved_goal_min: # Minimum XYZ position for the achieved_goal
-      x: -0.55
-      y: -0.55
+      x: -0.50
+      y: -0.50
       z: 0.10
 
-    # In this task, this is the same as goal-sampling range.
+    # In this task, this is the same as the goal sampling range — must
+    # mirror position_goal_max/min exactly so the obs-space declared
+    # bounds match the actual sampling support.
     position_desired_goal_max: # Maximum XYZ position for the desired_goal
-      x: 0.40
-      y: 0.40
-      z: 0.40
+      x: 0.25
+      y: 0.15
+      z: 0.25
     position_desired_goal_min: # Minimum XYZ position for the desired_goal
       x: 0.15
-      y: -0.40
-      z: 0.10
+      y: -0.15
+      z: 0.15
 
 
     # ******** Gazebo Simulation parameters
