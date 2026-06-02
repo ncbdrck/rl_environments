@@ -918,13 +918,13 @@ class NED2ReacherGoalEnv(ned2_robot_goal_real.NED2RobotGoalEnv):
             while not done:
                 done = self._check_joint_states_ready()
 
-        # --- Get current arm-joint values (slice off the physical gripper
-        # joints; reach obs/action are arm-only and the declared bounds
-        # cover the 6 arm joints, not the 8-joint joint_pos_all).
-        n_arm = len(self.arm_joint_names)
-        arm_joint_pos = list(self.joint_pos_all[:n_arm])
-        arm_joint_vel = list(self.current_joint_velocities[:n_arm])
-        self.joint_values = arm_joint_pos  # used by delta-action code paths
+        # --- Get Current Joint values - only for the joints we are using
+        # NED2 always publishes 8 joint states (6 arm + 2 mors prismatic fingers),
+        # so joint_pos_all and current_joint_velocities are 8-dim. The declared
+        # bounds (min/max_joint_angles, min/max_joint_vel in the task config)
+        # cover all 8 to match.
+        self.joint_values = list(self.joint_pos_all)
+        # we don't need to convert this to numpy array since we concat using numpy below
 
         if self.prev_action is None:
             # we can use the ee_pos as the previous action - for EE action type
@@ -941,8 +941,8 @@ class NED2ReacherGoalEnv(ned2_robot_goal_real.NED2RobotGoalEnv):
         # observation_space (Box(..., dtype=np.float32)); without it
         # numpy promotes to float64 and Gymnasium's PassiveEnvChecker
         # warns, and SB3 silently casts every step in the HER buffer.
-        obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, arm_joint_pos,
-                              prev_action, arm_joint_vel), axis=None,
+        obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
+                              prev_action, self.current_joint_velocities), axis=None,
                              dtype=np.float32)
 
         if self.log_internal_state:

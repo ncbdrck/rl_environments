@@ -56,6 +56,11 @@ ned2: #namespace
     max_distance: 1.00 # Maximum distance from EE to the desired GOAL EE (50cm + 50cm)
 
     # No gripper in this task, otherwise we would have 8 values for the gripper
+    # 8 values: 6 arm joints + 2 mors PRISMATIC joints (metres).
+    # NED2 always publishes 8 joint states (the gripper is part of the
+    # standard URDF / Gazebo joint_state_publisher). The reach ACTION
+    # only controls the 6 arm joints, but the observation includes the
+    # full 8 to match what the joint_states topic returns.
     min_joint_angles:
       - -2.949
       - -1.833  # joint_2 (URDF: -105° = -1.833 rad)
@@ -63,8 +68,9 @@ ned2: #namespace
       - -2.089
       - -1.919
       - -2.53
+      - -0.01   # mors_1 (metres, URDF prismatic limit)
+      - -0.01   # mors_2 (metres, URDF prismatic limit)
 
-    # No gripper in this task, otherwise we would have 8 values for the gripper
     max_joint_angles:
       - 2.949
       - 0.61
@@ -72,8 +78,10 @@ ned2: #namespace
       - 2.089
       - 1.922
       - 2.53
+      - 0.01    # mors_1 (metres, URDF prismatic limit)
+      - 0.01    # mors_2 (metres, URDF prismatic limit)
 
-    # No gripper in this task, otherwise we would have 8 values for the gripper
+    # 8 values: 6 arm (rad/s) + 2 mors (m/s, prismatic).
     min_joint_vel:
       - 0.0
       - 0.0
@@ -81,10 +89,12 @@ ned2: #namespace
       - 0.0
       - 0.0
       - 0.0
+      - 0.0
+      - 0.0
 
-    # No gripper in this task, otherwise we would have 8 values for the gripper
     # Per Niryo's joints_interface docs (stepper v_max for joints 1-3) and
     # the Niryo URDF velocity limits (joints 4-6 = 2.0 rad/s).
+    # Mors: URDF velocity="5" (prismatic, m/s).
     max_joint_vel:
       - 1.57    # joint_1 (stepper, v_max 1.571 rad/s)
       - 1.047   # joint_2 (stepper, v_max 1.047 rad/s)
@@ -92,6 +102,8 @@ ned2: #namespace
       - 2.0     # joint_4 (dynamixel, URDF v_max)
       - 2.0     # joint_5 (dynamixel, URDF v_max)
       - 2.0     # joint_6 (dynamixel, URDF v_max)
+      - 5.0     # mors_1 (m/s, URDF)
+      - 5.0     # mors_2 (m/s, URDF)
 
     # ******** goal space
     position_goal_max: # Maximum XYZ position for the goal

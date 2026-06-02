@@ -805,13 +805,13 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
         # --- 3. Euclidian distance
         euclidean_distance_ee_goal = scipy.spatial.distance.euclidean(self.ee_pos, current_goal)  # float
 
-        # --- Get current arm-joint values (slice off the physical gripper
-        # joints; reach obs/action are arm-only and the declared bounds
-        # cover the 6 arm joints, not the 8-joint joint_pos_all).
-        n_arm = len(self.arm_joint_names)
-        arm_joint_pos = list(self.joint_pos_all[:n_arm])
-        arm_joint_vel = list(self.current_joint_velocities[:n_arm])
-        self.joint_values = arm_joint_pos  # used by delta-action code paths
+        # --- Get Current Joint values - only for the joints we are using
+        # NED2 always publishes 8 joint states (6 arm + 2 mors prismatic fingers),
+        # so joint_pos_all and current_joint_velocities are 8-dim. The declared
+        # bounds (min/max_joint_angles, min/max_joint_vel in the task config)
+        # cover all 8 to match.
+        self.joint_values = list(self.joint_pos_all)
+        # we don't need to convert this to numpy array since we concat using numpy below
 
         if self.prev_action is None:
             # we can use the ee_pos as the previous action - for EE action type
@@ -825,8 +825,8 @@ class NED2ReacherEnv(ned2_robot_real.NED2RobotEnv):
             prev_action = self.prev_action.copy()
 
         # our observations
-        obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, arm_joint_pos,
-                              prev_action, arm_joint_vel), axis=None, dtype=np.float32)
+        obs = np.concatenate((self.ee_pos, vec_ee_goal, euclidean_distance_ee_goal, self.joint_pos_all,
+                              prev_action, self.current_joint_velocities), axis=None, dtype=np.float32)
 
         if self.log_internal_state:
             rospy.loginfo(f"Observations --->: {obs}")
